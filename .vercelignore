@@ -1,12 +1,13 @@
 # Never upload secrets or business data to the build.
 .env
 .env.*
-!.env.example
 
 *.har
 *.xlsx
-data/
-data.local-backup/
+
+# Root-only: src/data/plan-calendar.json is imported by the app and must ship.
+/data/
+/data.local-backup/
 
 node_modules
 dist
