@@ -1383,3 +1383,23 @@ table.day-table tfoot td {
   color: var(--ink-muted);
   border: 1px solid var(--rule);
 }
+
+/* Horizontal ranked bars: the name sits on its own line, value at the end. */
+.c-rowlabel {
+  fill: var(--ink-2);
+  font-size: 12px;
+  font-family: var(--font);
+}
+
+.c-value {
+  fill: var(--ink);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The hit area sits under the row; highlighting it is enough of a cue. */
+.c-hit.on {
+  fill: var(--accent-wash);
+}

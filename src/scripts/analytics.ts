@@ -2,7 +2,7 @@
  * Production ABC: fiscal-year Pareto analysis of packing production value,
  * by product, buyer, customer and company.
  */
-import { barChart, bindChartTooltips } from '../lib/charts';
+import { barChart, barChartH, bindChartTooltips } from '../lib/charts';
 
 interface AbcRow {
   name: string;
@@ -176,13 +176,12 @@ if (root) {
       ? `top ${top.length} of ${dim.rows.length} · A ${dim.counts.A} · B ${dim.counts.B} · C ${dim.counts.C}`
       : 'no data';
 
-    host.innerHTML = barChart({
-      categories: top.map((r) => (r.name.length > 13 ? `${r.name.slice(0, 12)}…` : r.name)),
+    // Horizontal: these names are long, and every one gets its own line.
+    host.innerHTML = barChartH({
+      categories: top.map((r) => (r.name.length > 24 ? `${r.name.slice(0, 23)}…` : r.name)),
       width: chartWidth(host),
-      height: 250,
       format: usd,
       unit: '$',
-      labelEvery: 1,
       series: [{ name: 'Value', color: '--series-1', values: top.map((r) => r.value) }],
     });
   }

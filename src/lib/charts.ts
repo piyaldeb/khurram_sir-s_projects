@@ -284,3 +284,71 @@ export function bindChartTooltips(host: HTMLElement) {
   host.addEventListener('mousemove', show);
   host.addEventListener('mouseleave', hide);
 }
+
+/**
+ * Horizontal bars for ranked lists.
+ *
+ * Long category names — product codes, buyer and customer names — collide on a
+ * vertical axis no matter how the labels are staggered. Turning the chart on
+ * its side gives every name a full line of its own and puts the value at the
+ * end of its bar, so the chart reads without a legend or a tooltip.
+ *
+ * One hue throughout: these bars are ranked, and colour must follow the entity
+ * rather than its position, so rank is carried by length and order alone.
+ */
+export function barChartH(opts: ChartOptions): string {
+  const { categories, series } = opts;
+  const fmt = opts.format ?? compact;
+  const bar = series[0];
+  if (!bar) return '';
+
+  const values = categories.map((_, i) => bar.values[i] ?? 0);
+  const maxValue = Math.max(...values, 0);
+
+  const ROW = 30;
+  const BAR = 17;
+  const labelChars = Math.max(...categories.map((c) => c.length), 4);
+  const left = Math.min(Math.max(labelChars * 6.6 + 12, 70), 190);
+  const valueRoom = Math.max(...values.map((v) => fmt(v).length), 4) * 6.7 + 14;
+  const right = Math.min(valueRoom, 120);
+
+  const plotW = Math.max(opts.width - left - right, 40);
+  const plotH = categories.length * ROW;
+  const height = plotH + 34;
+
+  const ticks = niceTicks(maxValue, 4);
+  const top = ticks[ticks.length - 1] || 1;
+  const x = (v: number) => left + (v / top) * plotW;
+
+  const grid = ticks
+    .map(
+      (t) =>
+        `<line class="c-grid" x1="${x(t).toFixed(1)}" y1="0" x2="${x(t).toFixed(1)}" y2="${plotH}" />` +
+        `<text class="c-tick" x="${x(t).toFixed(1)}" y="${plotH + 18}" text-anchor="middle">${opts.unit ?? ''}${compact(t)}</text>`,
+    )
+    .join('');
+
+  const rows = categories
+    .map((cat, i) => {
+      const v = values[i];
+      const y = i * ROW + (ROW - BAR) / 2;
+      const width = Math.max(x(v) - left, v > 0 ? 2 : 0);
+      const tip = `<strong>${cat}</strong><span><i style="background:var(${bar.color})"></i>${esc(
+        bar.name,
+      )}<b>${fmt(v)}</b></span>`;
+
+      return (
+        `<rect class="c-hit" x="0" y="${i * ROW}" width="${opts.width}" height="${ROW}" data-tip="${esc(tip)}" />` +
+        `<text class="c-rowlabel" x="${left - 10}" y="${(y + BAR / 2 + 4).toFixed(1)}" text-anchor="end">${esc(cat)}</text>` +
+        `<rect class="c-bar" x="${left}" y="${y.toFixed(1)}" width="${width.toFixed(1)}" height="${BAR}" rx="3" fill="var(${bar.color})" />` +
+        `<text class="c-value" x="${(left + width + 8).toFixed(1)}" y="${(y + BAR / 2 + 4).toFixed(1)}">${esc(fmt(v))}</text>`
+      );
+    })
+    .join('');
+
+  return `<svg class="chart" viewBox="0 0 ${opts.width} ${height}" width="${opts.width}" height="${height}" role="img">
+    ${grid}
+    <line class="c-axis" x1="${left}" y1="0" x2="${left}" y2="${plotH}" />
+    ${rows}
+  </svg>`;
+}
