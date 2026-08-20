@@ -41,6 +41,52 @@ site's own `/api/*` routes.
 For production: `npm run build && npm start` (the start script loads `.env` at runtime, so
 you can change credentials without rebuilding).
 
+## Deploying to Vercel
+
+The app runs as serverless functions on Vercel, which changes two things:
+
+- **No writable filesystem.** Supabase must be configured — it is the only
+  storage that works there. Locally the file fallback still applies.
+- **A hard request timeout.** A cold fiscal year needs ~24 Odoo report builds,
+  far more than one request allows, so `/api/analytics` fills a few months per
+  call (`ANALYTICS_FETCH_PER_REQUEST`, default 4) and the page polls until
+  nothing is pending, showing partial figures meanwhile.
+
+The adapter switches automatically: `@astrojs/vercel` when `VERCEL` or
+`DEPLOY_TARGET=vercel` is set, `@astrojs/node` otherwise. Build locally with
+`DEPLOY_TARGET=vercel npm run build` to check the serverless bundle.
+
+### Steps
+
+1. **Import the repo** at [vercel.com/new](https://vercel.com/new) — framework
+   detects as Astro, no build settings to change.
+2. **Add the environment variables** (Settings → Environment Variables). These
+   are secrets and must be entered by you:
+
+   | Variable | Notes |
+   |---|---|
+   | `ODOO_URL` | `https://taps.odoo.com` |
+   | `ODOO_DB` | `masbha-tex-taps-master-2093561` |
+   | `ODOO_USERNAME` | the Odoo login |
+   | `ODOO_PASSWORD` | password, or better an API key |
+   | `SUPABASE_URL` | `https://<ref>.supabase.co` |
+   | `SUPABASE_SERVICE_ROLE_KEY` | server-side only — never `PUBLIC_` |
+   | `ODOO_TZ` | `Asia/Dhaka` |
+
+   Optional: `PRODUCTION_COMPANIES`, `ODOO_SYNC_FRESH_MINUTES`,
+   `ANALYTICS_FETCH_PER_REQUEST`.
+
+3. **Run `npm run db:setup` once locally** so both Supabase tables exist and the
+   cached months are uploaded. The deployment reads the same database, so it
+   starts warm.
+
+### Anything public?
+
+Nothing in the repo carries a credential — `.env`, `*.har`, `*.xlsx` and `data/`
+are all ignored. `src/data/plan-calendar.json` **is** committed, because the app
+imports it, and it contains the monthly production targets. If the repository is
+public, so are those.
+
 ## How the Odoo calls work
 
 Everything mirrors what the Odoo web client itself does, captured in
