@@ -282,8 +282,10 @@ if (root) {
 
     el.pareto.innerHTML = items.length
       ? paretoChart({
+          // Below ~26px a bar cannot carry a readable name, so the plot keeps
+          // its own width and the host scrolls sideways instead of crushing.
           items,
-          width: Math.max(el.pareto.clientWidth || 720, 320),
+          width: Math.max(el.pareto.clientWidth || 720, items.length * 26 + 96),
           height: 250,
         })
       : '<div class="state"><p>No data yet.</p></div>';
@@ -489,6 +491,17 @@ if (root) {
       .querySelectorAll<HTMLElement>('[data-company]')
       .forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
     void load();
+  });
+
+  // Charts are measured at render time, so a rotation or resize re-measures.
+  let resizeTimer: number | undefined;
+  window.addEventListener('resize', () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      if (!state.result) return;
+      renderRail(state.result);
+      renderPareto(state.result);
+    }, 180);
   });
 
   if (root.dataset.odoo !== '1') {

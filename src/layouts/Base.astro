@@ -31,7 +31,7 @@ const path = Astro.url.pathname;
           <span>Manufacturing Reports</span>
           <small>Odoo · JSON-RPC</small>
         </div>
-        <nav class="nav" aria-label="Sections">
+        <nav class="nav" aria-label="Sections" id="site-nav">
           <a href="/" class:list={['nav-link', { active: path === '/' }]}>Production report</a>
           <a href="/budget" class:list={['nav-link', { active: path.startsWith('/budget') }]}>
             Budget follow-up
@@ -41,9 +41,9 @@ const path = Astro.url.pathname;
           </a>
         </nav>
         <div class="topbar-spacer"></div>
-        <div class="conn">
+        <div class="conn" title={connectionLabel}>
           <span class={connected ? 'dot' : 'dot off'}></span>
-          <span>{connectionLabel}</span>
+          <span class="conn-label">{connectionLabel}</span>
         </div>
         <button class="btn" id="theme-toggle" type="button" aria-label="Toggle colour theme">
           Theme
