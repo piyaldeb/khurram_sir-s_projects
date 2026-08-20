@@ -1729,3 +1729,384 @@ table.day-table tfoot td {
   border-top: 2px solid var(--rule);
   background: var(--surface-sunk);
 }
+
+/* The date reads as a label; the native picker sits transparent over it. */
+.date-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 108px;
+  justify-content: center;
+}
+
+.date-field input[type='date'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.date-field input[type='date']:focus-visible {
+  opacity: 1;
+  background: var(--surface);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The grand row closes the sheet: inverted, with a hard rule above it. */
+.grand-row td {
+  background: var(--ink);
+  color: var(--plane);
+  border-top: 2px solid var(--ink);
+  border-bottom: 0;
+  font-weight: 650;
+}
+
+.grand-row .sticky-col {
+  background: var(--ink);
+  color: var(--plane);
+}
+
+.grand-row .rail-sub,
+.grand-row td.units {
+  color: color-mix(in srgb, var(--plane) 62%, transparent);
+}
+
+table.day-grid .dash {
+  color: var(--ink-muted);
+}
+
+/* ------------------------------------------------ budget month, 2a layout */
+
+.rail-head {
+  padding: 2px 2px 4px;
+}
+
+.rail-title {
+  margin: 4px 0 6px;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.rail-head .rail-sub {
+  line-height: 1.5;
+}
+
+/* Rail blocks read as one column, ruled apart rather than boxed. */
+.day-rail > .rail-block {
+  padding: 13px 2px 14px;
+  border-top: 1px solid var(--grid);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.day-rail > .rail-block.panel {
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  margin-top: 4px;
+}
+
+.rail-of {
+  font-size: 11.5px;
+  font-weight: 450;
+  color: var(--ink-muted);
+  letter-spacing: 0;
+}
+
+.rail-block h2 .rail-of {
+  text-transform: none;
+}
+
+.rail-compare {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 5px 8px;
+  margin-top: 9px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.rail-compare .meter {
+  margin: 0;
+}
+
+.rail-compare b {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.meter-fill.critical { background: var(--critical); }
+.meter-fill.warning { background: var(--warning); }
+.meter-fill.good { background: var(--good); }
+
+.plan-input-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.plan-input-head h2 {
+  margin: 0;
+}
+
+.plan-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+}
+
+.plan-field em,
+.rail-pairs em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-muted);
+  margin-left: 3px;
+}
+
+.plan-field input {
+  width: 108px;
+  padding: 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--plane);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.plan-field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--surface);
+}
+
+/* --- the month grid ----------------------------------------------------- */
+
+table.month-grid .date-cell {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+table.month-grid .date-cell .dow {
+  color: var(--ink-muted);
+  margin-left: 3px;
+}
+
+table.month-grid input.cell {
+  width: 84px;
+  padding: 3px 7px;
+  font-size: 12px;
+}
+
+table.month-grid td.pace {
+  min-width: 78px;
+}
+
+table.month-grid td.pace .meter {
+  margin: 0;
+}
+
+/* Today is carried but not counted; days still to come are quiet. */
+table.month-grid tr.today td {
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+table.month-grid tr.today .sticky-col {
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+table.month-grid tr.future td,
+table.month-grid tr.future .sticky-col {
+  color: var(--ink-muted);
+}
+
+table.month-grid tr.future input.cell {
+  background: transparent;
+}
+
+table.month-grid tfoot .total-row td,
+table.month-grid tfoot .grand-row td {
+  position: static;
+}
+
+table.day-grid td.behind { color: var(--critical); }
+table.day-grid td.ahead { color: var(--good); }
+
+/* ------------------------------------------------------ loading skeletons */
+
+.sk {
+  display: inline-block;
+  border-radius: 4px;
+  background: linear-gradient(
+    100deg,
+    var(--surface-sunk) 40%,
+    color-mix(in srgb, var(--surface-sunk) 45%, var(--surface)) 50%,
+    var(--surface-sunk) 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk {
+    animation: none;
+  }
+}
+
+.sk-line {
+  display: block;
+  margin-top: 8px;
+}
+
+.sk-chip {
+  width: 88px;
+  height: 26px;
+  border-radius: 999px;
+}
+
+.sk-chart {
+  padding: 8px;
+}
+
+.sk-chart .sk {
+  border-radius: var(--radius-sm);
+}
+
+.sk-table {
+  padding: 4px 0;
+}
+
+.sk-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--grid);
+}
+
+.sk-row.head {
+  background: var(--surface-sunk);
+}
+
+.sk-cell {
+  height: 12px;
+  flex: 1;
+}
+
+.sk-cell:first-child {
+  flex: 2;
+}
+
+/* ---------------------------------------------------------- ABC 3a extras */
+
+.rail-compare.bands span {
+  font-weight: 700;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.meter-fill.band-A { background: var(--accent); }
+.meter-fill.band-B { background: color-mix(in srgb, var(--accent) 55%, var(--surface-sunk)); }
+.meter-fill.band-C { background: color-mix(in srgb, var(--accent) 25%, var(--surface-sunk)); }
+
+.rail-months .chart {
+  overflow: visible;
+}
+
+table.abc-grid td.co {
+  color: var(--ink-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+table.abc-grid td.muted {
+  color: var(--ink-muted);
+}
+
+/* Pareto: one hue in ordinal steps — ABC is an ordered band, not categories. */
+.pareto .c-bar.abc-A { fill: var(--accent); }
+.pareto .c-bar.abc-B { fill: color-mix(in srgb, var(--accent) 55%, var(--surface-sunk)); }
+.pareto .c-bar.abc-C { fill: color-mix(in srgb, var(--accent) 25%, var(--surface-sunk)); }
+
+.pareto .c-line.cum {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.pareto .c-cut {
+  stroke: var(--rule);
+  stroke-dasharray: 4 3;
+}
+
+.pareto .c-cut-label {
+  fill: var(--ink-muted);
+  font-size: 10.5px;
+  font-family: var(--font);
+}
+
+.c-swatch.abc-A { background: var(--accent); }
+.c-swatch.abc-B { background: color-mix(in srgb, var(--accent) 55%, var(--surface-sunk)); }
+.c-swatch.abc-C { background: color-mix(in srgb, var(--accent) 25%, var(--surface-sunk)); }
+
+.pareto-name {
+  font-size: 10px;
+}
+
+/* The dense grids do their own row treatment; the base zebra fights the
+   company/total/grand rows, so it is switched off here and the closing rows
+   restated at winning specificity. */
+table.day-grid tbody tr:nth-child(even) td {
+  background: transparent;
+}
+
+table.day-grid tbody tr.company-row td {
+  background: var(--plane);
+}
+
+table.day-grid tbody tr.total-row td,
+table.day-grid tfoot tr.total-row td {
+  background: var(--surface-sunk);
+}
+
+table.day-grid tbody tr.grand-row td,
+table.day-grid tfoot tr.grand-row td,
+table.day-grid tbody tr.grand-row .sticky-col,
+table.day-grid tfoot tr.grand-row .sticky-col {
+  background: var(--ink);
+  color: var(--plane);
+}
+
+table.day-grid tbody tr.grand-row:hover td,
+table.day-grid tfoot tr.grand-row:hover td {
+  background: var(--ink);
+}
+
+table.day-grid tbody tr.today td,
+table.day-grid tbody tr.today .sticky-col {
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}

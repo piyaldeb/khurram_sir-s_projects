@@ -352,3 +352,141 @@ export function barChartH(opts: ChartOptions): string {
     ${rows}
   </svg>`;
 }
+
+/**
+ * Pareto: value per item as bars, cumulative share as a line, one axis.
+ *
+ * The classic Pareto puts value on one y-scale and cumulative percent on a
+ * second. Two scales on one plot let the author set the crossing point
+ * wherever they like, so this expresses BOTH measures as a share of the total:
+ * each bar is that item's percent of the year, the line is the running total.
+ * The dollar figures stay in the tooltip and the table beside it.
+ *
+ * Bars are one hue in three ordinal steps — A darkest through C lightest —
+ * because ABC is an ordered band, not three unrelated categories.
+ */
+export interface ParetoItem {
+  name: string;
+  /** Share of the total, 0–1. */
+  share: number;
+  cumShare: number;
+  cls: 'A' | 'B' | 'C';
+  /** Shown in the tooltip. */
+  detail: string;
+}
+
+export function paretoChart(opts: {
+  items: ParetoItem[];
+  width: number;
+  height?: number;
+}): string {
+  const { items } = opts;
+  if (!items.length) return '';
+
+  const PAD_L = 46;
+  const PAD_R = 46;
+  const PAD_T = 14;
+  // Angled name labels under the bars need real room.
+  const PAD_B = 64;
+
+  const height = opts.height ?? 260;
+  const plotW = Math.max(opts.width - PAD_L - PAD_R, 40);
+  const plotH = Math.max(height - PAD_T - PAD_B, 40);
+
+  const y = (share: number) => PAD_T + plotH - share * plotH;
+  const slot = plotW / items.length;
+  const barW = Math.max(slot * 0.62, 1.5);
+
+  const ticks = [0, 0.2, 0.4, 0.6, 0.8, 1];
+  const grid = ticks
+    .map(
+      (t) =>
+        `<line class="c-grid" x1="${PAD_L}" y1="${y(t).toFixed(1)}" x2="${(PAD_L + plotW).toFixed(
+          1,
+        )}" y2="${y(t).toFixed(1)}" />` +
+        `<text class="c-tick" x="${PAD_L - 8}" y="${(y(t) + 4).toFixed(1)}" text-anchor="end">${Math.round(
+          t * 100,
+        )}%</text>`,
+    )
+    .join('');
+
+  // Where class A stops carrying 80% of the value.
+  const lastA = items.reduce((acc, item, i) => (item.cls === 'A' ? i : acc), -1);
+  const cutX = lastA >= 0 ? PAD_L + slot * (lastA + 1) : null;
+  const cut =
+    cutX === null
+      ? ''
+      : `<line class="c-cut" x1="${cutX.toFixed(1)}" y1="${PAD_T}" x2="${cutX.toFixed(1)}" y2="${(
+          PAD_T + plotH
+        ).toFixed(1)}" />
+         <text class="c-cut-label" x="${(cutX + 6).toFixed(1)}" y="${(PAD_T + 12).toFixed(
+           1,
+         )}">class A ends · 80% of value</text>`;
+
+  const esc = (v: string) =>
+    v.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+  // Bars are scaled to the biggest single share so the tail stays visible;
+  // the axis belongs to the cumulative line, which is the honest 0–100%.
+  const biggest = Math.max(...items.map((i) => i.share), 0.0001);
+
+  const bars = items
+    .map((item, i) => {
+      const h = (item.share / biggest) * plotH * 0.55;
+      const x = PAD_L + slot * i + (slot - barW) / 2;
+      return `<rect class="c-bar abc-${item.cls}" x="${x.toFixed(1)}" y="${(
+        PAD_T + plotH - h
+      ).toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, 0.5).toFixed(1)}" rx="2" />`;
+    })
+    .join('');
+
+  const points = items
+    .map((item, i) => `${(PAD_L + slot * i + slot / 2).toFixed(1)},${y(item.cumShare).toFixed(1)}`)
+    .join(' ');
+
+  const hits = items
+    .map((item, i) => {
+      const tip =
+        `<strong>${esc(item.name)}</strong>` +
+        `<span>Class ${item.cls}<b>${(item.share * 100).toFixed(1)}%</b></span>` +
+        `<span>Cumulative<b>${(item.cumShare * 100).toFixed(1)}%</b></span>` +
+        `<span>${esc(item.detail)}</span>`;
+      return `<rect class="c-hit" x="${(PAD_L + slot * i).toFixed(1)}" y="${PAD_T}" width="${slot.toFixed(
+        1,
+      )}" height="${plotH}" data-tip="${esc(tip)}" />`;
+    })
+    .join('');
+
+  // Every bar is named. Angled so neighbours never collide; truncated so the
+  // longest customer names stay inside their slot.
+  const maxChars = Math.max(Math.floor(slot / 4.2) + 6, 8);
+  const nameLabels = items
+    .map((item, i) => {
+      const x = PAD_L + slot * i + slot / 2;
+      const yBase = PAD_T + plotH + 10;
+      const label = item.name.length > maxChars ? `${item.name.slice(0, maxChars - 1)}…` : item.name;
+      return `<text class="c-cat pareto-name" transform="rotate(-38 ${x.toFixed(1)} ${yBase.toFixed(
+        1,
+      )})" x="${x.toFixed(1)}" y="${yBase.toFixed(1)}" text-anchor="end">${esc(label)}</text>`;
+    })
+    .join('');
+
+  const legend = `<div class="c-legend">
+    <span class="c-legend-item"><span class="c-swatch abc-A"></span>Class A</span>
+    <span class="c-legend-item"><span class="c-swatch abc-B"></span>B</span>
+    <span class="c-legend-item"><span class="c-swatch abc-C"></span>C</span>
+    <span class="c-legend-item"><span class="c-swatch ref"></span>Cumulative share</span>
+  </div>`;
+
+  return `${legend}<svg class="chart pareto" viewBox="0 0 ${opts.width} ${height}" width="${opts.width}" height="${height}" role="img">
+    ${grid}
+    <line class="c-axis" x1="${PAD_L}" y1="${(PAD_T + plotH).toFixed(1)}" x2="${(PAD_L + plotW).toFixed(
+      1,
+    )}" y2="${(PAD_T + plotH).toFixed(1)}" />
+    ${bars}
+    ${cut}
+    <polyline class="c-line cum" points="${points}" />
+    ${nameLabels}
+    ${hits}
+  </svg>`;
+}

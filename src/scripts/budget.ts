@@ -19,6 +19,8 @@ import {
 import { bindChartTooltips, barChart, lineChart } from '../lib/charts';
 import type { PeriodSummary } from '../lib/summary';
 
+import { skeleton } from '../lib/skeleton';
+
 const root = document.querySelector<HTMLElement>('.budget');
 
 if (root) {
@@ -33,14 +35,10 @@ if (root) {
     monthSelect: $<HTMLSelectElement>('#month-select'),
     fySelect: $<HTMLSelectElement>('#fy-select'),
     lede: $<HTMLElement>('#page-lede'),
-    zipperPlan: $<HTMLInputElement>('#zipperPlan'),
-    mtPlan: $<HTMLInputElement>('#mtPlan'),
-    planRows: $<HTMLElement>('#plan-rows'),
-    kpis: $<HTMLElement>('#budget-kpis'),
-    rows: $<HTMLElement>('#budget-rows'),
-    foot: $<HTMLElement>('#budget-foot'),
-    daysTitle: $<HTMLElement>('#days-title'),
-    daysHint: $<HTMLElement>('#days-hint'),
+    monthRail: $<HTMLElement>('#month-rail'),
+    monthGrid: $<HTMLElement>('#month-grid'),
+    monthNote: $<HTMLElement>('#month-note'),
+    chartNote: $<HTMLElement>('#chart-note'),
     save: $<HTMLButtonElement>('#save'),
     saveState: $<HTMLElement>('#save-state'),
     chartCumulative: $<HTMLElement>('#chart-cumulative'),
@@ -133,9 +131,7 @@ if (root) {
     const last = syncStatus.lastSyncedAt;
     const stale = syncStatus.staleMonths ?? [];
     el.syncbar.dataset.state = stale.length ? 'stale' : 'fresh';
-    el.syncTitle.textContent = stale.length
-      ? `${stale.length} ${stale.length === 1 ? 'month' : 'months'} out of date`
-      : 'Up to date with Odoo';
+    el.syncTitle.textContent = stale.length ? `${stale.length} ${stale.length === 1 ? 'month' : 'months'} out of date` : 'Synced';
     el.syncNote.textContent = last
       ? `Last synced ${ago(last)} · ${new Date(last).toLocaleString()}`
       : 'Never synced';
@@ -197,198 +193,348 @@ if (root) {
 
   /* ------------------------------------------------------------ month view */
 
-  function renderPlan(view: BudgetView) {
+  /* ------------------------------------------------------------ month rail */
+
+  const railBlock = (label: string, body: string, note = '') =>
+    `<section class="rail-block">
+      <h2>${label}</h2>
+      ${body}
+      ${note ? `<p class="rail-note">${note}</p>` : ''}
+    </section>`;
+
+  const shortDate = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  };
+
+  const bar = (fillPct: number, cls = 'accent') =>
+    `<div class="meter"><span class="meter-fill ${cls}" style="width:${Math.max(
+      0,
+      Math.min(fillPct, 100),
+    ).toFixed(1)}%"></span></div>`;
+
+  function renderRail(view: BudgetView) {
     const s = view.summary;
-    const label = monthLabel(state.doc.month).split(' ')[0];
-    const rows: [string, string, string][] = [
-      [`${label} BUDGET`, money(s.budget), 'E5 = Zipper Plan + MT Plan'],
-      ['Per Day Req Production', money(s.perDayRequired), 'E6 = Budget ÷ working days'],
-      ['Zipper Per day Req', money(s.zipperPerDay), 'E8 = Zipper Plan ÷ working days'],
-      ['MT Per day Plan', money(s.mtPerDay), 'E10 = MT Plan ÷ working days'],
-      [
-        'Run rate req as on today',
-        s.runRateRequired === null ? 'Month completed' : money(s.runRateRequired),
-        'G11 = (Budget − done) ÷ days left',
-      ],
-      ['Working days', count(s.workingDays), `${s.daysEntered} produced · ${s.daysRemaining} left`],
+    const doc = state.doc;
+    const plan = planFor(doc.month);
+    const monthWord = monthLabel(doc.month).split(' ')[0];
+
+    const head = `<div class="rail-head">
+      <p class="eyebrow">${esc(plan?.sheet ?? monthLabel(doc.month))}</p>
+      <h2 class="rail-title">Can ${esc(monthWord)} still close?</h2>
+      <p class="rail-sub">Counted through ${
+        s.countedThrough ? esc(shortDate(s.countedThrough)) : '—'
+      } — ${count(s.daysEntered)} of ${count(s.workingDays)} working days.${
+        s.pendingTotal ? " Today's shift is still running, so it is carried but not counted." : ''
+      }</p>
+    </div>`;
+
+    const done = railBlock(
+      `Done <span class="rail-of">of ${money(s.budget)}</span>`,
+      `<p class="rail-figure">${pct(s.prodDonePct)}</p>
+       <p class="rail-sub">${money(s.totalDone)}</p>
+       ${bar(s.prodDonePct * 100)}`,
+    );
+
+    // The run rate only means anything while working days remain.
+    const paceRatio = s.averageProduction ? (s.runRateRequired ?? 0) / s.averageProduction : 0;
+    const widest = Math.max(s.runRateRequired ?? 0, s.averageProduction, 1);
+    const runRate = railBlock(
+      'Run rate required',
+      s.runRateRequired === null
+        ? '<p class="rail-figure">Month complete</p>'
+        : `<p class="rail-figure">${money(s.runRateRequired)}<span class="rail-of">/day · ${count(
+            s.daysRemaining,
+          )} days left</span></p>
+           <div class="rail-compare">
+             <span>needed</span>${bar((s.runRateRequired / widest) * 100, 'critical')}<b>${money(
+               s.runRateRequired,
+             )}</b>
+             <span>average</span>${bar((s.averageProduction / widest) * 100, 's1')}<b>${money(
+               s.averageProduction,
+             )}</b>
+           </div>`,
+      s.runRateRequired === null
+        ? ''
+        : `${paceRatio.toFixed(1)}× the pace held so far — plan is ${money(s.perDayRequired)}/day`,
+    );
+
+    const shortfall = s.budget - s.expectedMonthProduction;
+    const expected = railBlock(
+      'Expected at this pace',
+      `<p class="rail-figure">${money(s.expectedMonthProduction)}</p>
+       ${bar(
+         s.budget ? (s.expectedMonthProduction / s.budget) * 100 : 0,
+         shortfall > 0 ? 'warning' : 'good',
+       )}`,
+      shortfall > 0
+        ? `<span class="warn">${money(shortfall)} short</span> of budget — ${pct(
+            s.budget ? shortfall / s.budget : 0,
+          )} of the month`
+        : `<span class="good">${money(-shortfall)} over</span> budget at this pace`,
+    );
+
+    const plans = [
+      {
+        name: 'Zipper',
+        cls: 's1',
+        pctDone: s.zipperAchievedPct,
+        planValue: doc.zipperPlan,
+        done: s.zipperDone,
+        left: s.zipperRemaining,
+      },
+      {
+        name: 'Metal Trims',
+        cls: 's2',
+        pctDone: s.mtAchievedPct,
+        planValue: doc.mtPlan,
+        done: s.mtDone,
+        left: s.mtRemaining,
+      },
     ];
-    el.planRows.innerHTML = rows
-      .map(
-        ([name, value, note]) =>
-          `<tr><th scope="row">${esc(name)}<small>${esc(note)}</small></th><td>${esc(value)}</td></tr>`,
-      )
-      .join('');
+
+    const againstPlan = railBlock(
+      'Against each plan',
+      plans
+        .map(
+          (row) => `<div class="rail-split">
+            <div class="rail-split-head">
+              <span><i class="swatch ${row.cls}"></i>${esc(row.name)}</span>
+              <b>${pct(row.pctDone)} <span class="rail-of">of ${money(row.planValue)}</span></b>
+            </div>
+            ${bar(row.pctDone * 100, row.cls)}
+            <p class="rail-sub">${money(row.done)} done · ${money(row.left)} to go</p>
+          </div>`,
+        )
+        .join(''),
+    );
+
+    // The only two figures on this page that are the user's, not Odoo's.
+    const planCard = `<section class="rail-block panel plan-input">
+      <div class="plan-input-head">
+        <h2>The plan</h2><span class="input-flag">your input</span>
+      </div>
+      <label class="plan-field">
+        <span>Zipper plan <em>E7</em></span>
+        <input type="number" id="zipperPlan" min="0" step="1000" value="${doc.zipperPlan || ''}" />
+      </label>
+      <label class="plan-field">
+        <span>Metal Trims plan <em>E9</em></span>
+        <input type="number" id="mtPlan" min="0" step="1000" value="${doc.mtPlan || ''}" />
+      </label>
+      <dl class="rail-pairs">
+        <dt>Budget <em>E5</em></dt><dd>${money(s.budget)}</dd>
+        <dt>Per day <em>E6</em></dt><dd>${money(s.perDayRequired)}</dd>
+      </dl>
+      <p class="rail-note">Zipper ${money(s.zipperPerDay)}/day · Trims ${money(
+        s.mtPerDay,
+      )}/day · ${count(s.workingDays)} working days</p>
+    </section>`;
+
+    el.monthRail.innerHTML = head + done + runRate + expected + againstPlan + planCard;
   }
 
-  function renderMonthKpis(view: BudgetView) {
-    const s = view.summary;
-    el.kpis.innerHTML = [
-      tile(
-        'Prod. done',
-        pct(s.prodDonePct),
-        `${money(s.totalDone)} of ${money(s.budget)}${
-          s.countedThrough ? ` · to ${shortDate(s.countedThrough)}` : ''
-        }`,
-      ),
-      tile('Av. prod', money(s.averageProduction), `over ${s.daysEntered} producing days`),
-      tile('Achieve % zipper', pct(s.zipperAchievedPct), `${money(s.zipperDone)} of ${money(state.doc.zipperPlan)}`),
-      tile('Achieve % MT', pct(s.mtAchievedPct), `${money(s.mtDone)} of ${money(state.doc.mtPlan)}`),
-      tile(
-        'Expected month',
-        money(s.expectedMonthProduction),
-        s.expectedMonthProduction >= s.budget ? 'ahead of budget' : 'short of budget',
-        s.budget && s.expectedMonthProduction < s.budget ? 'warn' : 'good',
-      ),
-      tile('Remaining zipper', money(s.zipperRemaining), 'target left'),
-      tile('Remaining MT', money(s.mtRemaining), 'target left'),
-    ].join('');
-  }
+  /* ----------------------------------------------------------- month chart */
 
   function renderMonthCharts(view: BudgetView) {
-    const cats = view.rows.map((r) => String(r.day));
-    // The actual line stops at the last day that produced; days still to come
-    // would otherwise draw a flat run along the last value.
-    let lastProduced = -1;
-    view.rows.forEach((r, i) => {
-      if (r.produced) lastProduced = i;
+    const s = view.summary;
+    const rows = view.rows;
+    const cats = rows.map((r) => String(r.day));
+
+    let lastCounted = -1;
+    rows.forEach((r, i) => {
+      if (r.produced) lastCounted = i;
     });
-    const cum = view.rows.map((r, i) => (i <= lastProduced ? r.cumulative : null));
+
+    const production = rows.map((r, i) => (i <= lastCounted ? r.cumulative : null));
+    const target = rows.map((r) => r.cumTarget);
+
+    // Where the month lands if the pace held so far simply continues.
+    const pace = rows.map((_row, i) => {
+      if (lastCounted < 0 || i < lastCounted) return null;
+      return rows[lastCounted].cumulative + s.averageProduction * (i - lastCounted);
+    });
 
     el.chartCumulative.innerHTML = lineChart({
       categories: cats,
-      width: chartWidth(el.chartCumulative),
+      width: Math.max(el.chartCumulative.clientWidth || 720, 320),
       height: 250,
       format: money,
       unit: '$',
       series: [
-        { name: 'Target', color: '--chart-ref', values: view.rows.map((r) => r.cumTarget), dashed: true, reference: true },
-        { name: 'Actual', color: '--series-1', values: cum },
+        { name: 'Production', color: '--series-1', values: production },
+        { name: 'Target', color: '--chart-ref', values: target, dashed: true, reference: true },
+        { name: 'At this pace', color: '--warning', values: pace, dashed: true },
       ],
     });
-
-    el.chartDaily.innerHTML = barChart({
-      categories: cats,
-      width: chartWidth(el.chartDaily),
-      height: 250,
-      format: money,
-      unit: '$',
-      stacked: true,
-      series: [
-        { name: 'Zipper', color: '--series-1', values: view.rows.map((r) => r.zipper ?? 0) },
-        { name: 'Metal Trims', color: '--series-2', values: view.rows.map((r) => r.mt ?? 0) },
-      ],
-    });
-
     bindChartTooltips(el.chartCumulative);
-    bindChartTooltips(el.chartDaily);
+
+    el.chartNote.textContent = s.countedThrough
+      ? `Production to ${shortDate(s.countedThrough)}; the pace line carries ${money(
+          s.averageProduction,
+        )}/day to month end`
+      : 'No production counted yet';
   }
 
-  /** Today is highlighted; days still to come are simply pending. */
+  /* ------------------------------------------------------------ month grid */
+
   function rowClass(r: BudgetView['rows'][number]): string {
     const today = todayIso();
     if (r.date === today) return 'today';
-    if (!r.counted || !r.produced) return 'pending';
+    if (!r.counted) return 'future';
+    if (!r.produced) return 'pending';
     return '';
   }
 
-  function renderRows(view: BudgetView) {
-    const today = todayIso();
-    el.rows.innerHTML = view.rows
-      .map(
-        (r, i) => `<tr class="${rowClass(r)}">
-        <td class="num">${r.day}</td>
-        <td class="date-cell">${longDate(r.date)}<input
-          class="date-input" type="date" data-i="${i}" data-k="date" value="${r.date}"
-          aria-label="Date for working day ${r.day}" /></td>
-        <td><input class="cell num${r.auto ? ' auto' : ''}" type="number" step="1" data-i="${i}" data-k="zipper" value="${
-          r.zipper ?? ''
-        }" /></td>
-        <td><input class="cell num${r.auto ? ' auto' : ''}" type="number" step="1" data-i="${i}" data-k="mt" value="${
-          r.mt ?? ''
-        }" /></td>
-        <td class="num">${r.entered ? money(r.total) : ''}${
-          r.date === today ? ' <span class="tag">today</span>' : ''
-        }</td>
-        <td class="num">${r.counted && r.entered ? money(r.cumulative) : ''}</td>
-        <td class="num">${money(r.cumTarget)}</td>
-        <td class="num ${r.lagging > 0 ? 'behind' : 'ahead'}">${money(r.lagging)}</td>
-        <td><button class="row-del" type="button" data-del="${i}" aria-label="Remove day ${r.day}">×</button></td>
-      </tr>`,
-      )
-      .join('');
-
-    renderFoot(view);
-  }
-
-  function renderFoot(view: BudgetView) {
-    const s = view.summary;
-    el.foot.innerHTML = `<tr>
-      <td colspan="2">Total</td>
-      <td class="num">${money(s.zipperDone)}</td>
-      <td class="num">${money(s.mtDone)}</td>
-      <td class="num">${money(s.totalDone)}</td>
-      <td class="num">${money(s.totalDone)}</td>
-      <td class="num">${money(s.budget)}</td>
-      <td class="num">${money(s.budget - s.totalDone)}</td>
-      <td></td>
-    </tr>`;
-
-    el.daysTitle.textContent = `Working days · ${monthLabel(state.doc.month)}`;
-    const through = s.countedThrough ? shortDate(s.countedThrough) : '—';
-    el.daysHint.textContent =
-      `${s.workingDays} days · ${s.daysEntered} with production · counted through ${through}` +
-      (s.pendingTotal
-        ? ` · ${money(s.pendingTotal)} invoiced today, not counted yet`
-        : '');
-  }
-
-  /**
-   * "Saturday 1, 2026" - the weekday earns its place because the working
-   * calendar skips holidays, so the gaps only read as gaps with it shown.
-   */
-  const longDate = (iso: string) => {
+  /** "01 Aug Sat" — the weekday matters when the calendar skips holidays. */
+  const dayDate = (iso: string) => {
     const d = new Date(`${iso}T00:00:00Z`);
     if (Number.isNaN(d.getTime())) return esc(iso);
-    const weekday = d.toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
-    return `<span class="dow">${weekday}</span> ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const month = d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+    const dow = d.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' });
+    return `${day} ${month} <span class="dow">${dow}</span>`;
   };
 
-  const shortDate = (iso: string) =>
-    new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      timeZone: 'UTC',
-    });
+
+  /** The two closing rows: what is counted, and the budget they answer to. */
+  function footRows(view: BudgetView): string {
+    const s = view.summary;
+    const doc = state.doc;
+    const shortfall = s.budget - s.expectedMonthProduction;
+    return `<tr class="total-row">
+        <td class="sticky-col" colspan="2">Counted <span class="rail-sub">· ${count(
+          s.daysEntered,
+        )} of ${count(s.workingDays)} days</span></td>
+        <td class="num">${money(s.zipperDone)}</td>
+        <td class="num">${money(s.mtDone)}</td>
+        <td class="num">${money(s.totalDone)}</td>
+        <td class="num"><span class="rail-sub">avg ${money(s.averageProduction)}</span></td>
+        <td class="num" colspan="3"><span class="rail-sub">${pct(s.prodDonePct)} of budget · ${count(
+          s.daysRemaining,
+        )} days left</span></td>
+      </tr>
+      <tr class="grand-row">
+        <td class="sticky-col" colspan="2">Budget <span class="rail-sub">· ${esc(
+          monthLabel(doc.month),
+        )}</span></td>
+        <td class="num">${money(doc.zipperPlan)}</td>
+        <td class="num">${money(doc.mtPlan)}</td>
+        <td class="num">${money(s.budget)}</td>
+        <td class="num"><span class="rail-sub">${
+          s.runRateRequired === null ? 'complete' : `need ${money(s.runRateRequired)}`
+        }</span></td>
+        <td class="num" colspan="3"><span class="rail-sub">at this pace ${money(
+          s.expectedMonthProduction,
+        )}${shortfall > 0 ? ` · ${money(shortfall)} short` : ''}</span></td>
+      </tr>`;
+  }
+
+  function renderRows(view: BudgetView) {
+    const s = view.summary;
+    const today = todayIso();
+    const perDay = s.perDayRequired;
+    const doc = state.doc;
+
+    const head = `<thead>
+      <tr class="group-row">
+        <th class="sticky-col" colspan="2">Working day</th>
+        <th colspan="4" class="group-head">Production</th>
+        <th colspan="3" class="group-head">Against plan</th>
+      </tr>
+      <tr class="sub-row">
+        <th class="sticky-col">No.</th>
+        <th>Date</th>
+        <th class="num">Zipper</th>
+        <th class="num">Metal Trims</th>
+        <th class="num">Total</th>
+        <th class="num">vs ${money(perDay)}/day</th>
+        <th class="num">Cum. production</th>
+        <th class="num">Cum. target</th>
+        <th class="num">Lagging</th>
+      </tr>
+    </thead>`;
+
+    const body = view.rows
+      .map((r, i) => {
+        const future = !r.counted && r.date !== today;
+        const share = perDay ? Math.min((r.total / perDay) * 100, 100) : 0;
+
+        const tag =
+          r.date === today
+            ? '<span class="tag">today · not counted</span>'
+            : future
+              ? '<span class="rail-sub">to come</span>'
+              : '';
+
+        return `<tr class="${rowClass(r)}">
+          <td class="sticky-col num">${String(r.day).padStart(2, '0')}</td>
+          <td class="date-cell">${dayDate(r.date)} ${tag}</td>
+          <td class="num"><input class="cell num${
+            r.auto ? ' auto' : ''
+          }" type="number" step="1" data-i="${i}" data-k="zipper" value="${r.zipper ?? ''}" /></td>
+          <td class="num"><input class="cell num${
+            r.auto ? ' auto' : ''
+          }" type="number" step="1" data-i="${i}" data-k="mt" value="${r.mt ?? ''}" /></td>
+          <td class="num">${r.entered ? money(r.total) : '<span class="dash">—</span>'}</td>
+          <td class="num pace">${bar(share, r.total >= perDay ? 'good' : 's1')}</td>
+          <td class="num">${r.counted && r.entered ? money(r.cumulative) : ''}</td>
+          <td class="num">${money(r.cumTarget)}</td>
+          <td class="num ${r.lagging > 0 ? 'behind' : 'ahead'}">${
+            r.counted && r.entered
+              ? `${money(Math.abs(r.lagging))} ${r.lagging > 0 ? 'behind' : 'ahead'}`
+              : ''
+          }</td>
+        </tr>`;
+      })
+      .join('');
+
+
+
+    el.monthGrid.innerHTML = `<table class="grid day-grid month-grid">${head}<tbody>${body}</tbody><tfoot>${footRows(
+      view,
+    )}</tfoot></table>`;
+
+    el.monthNote.textContent =
+      'All working days, none collapsed. Tinted cells came from Odoo; typing over one makes it yours until the next sync. Today is shown, tagged, and left out of the average and the run rate.';
+  }
 
   /**
-   * Refresh the computed columns without rebuilding the rows.
+   * Refresh the computed parts without rebuilding the rows.
    *
    * Rewriting the table on each keystroke destroys the input being typed in,
-   * which drops focus and jumps the scroll position — so while a figure is
-   * being edited only the derived cells are touched.
+   * which drops focus and jumps the scroll position.
    */
   function updateDerived(view: BudgetView) {
-    const today = todayIso();
-    const trs = el.rows.children;
+    const s = view.summary;
+    const perDay = s.perDayRequired;
+    const trs = el.monthGrid.querySelectorAll('tbody tr');
 
     view.rows.forEach((r, i) => {
       const tr = trs[i] as HTMLElement | undefined;
       if (!tr) return;
       tr.className = rowClass(r);
-
-      const cells = tr.children;
-      cells[4].innerHTML =
-        (r.entered ? money(r.total) : '') +
-        (r.date === today ? ' <span class="tag">today</span>' : '');
-      cells[5].textContent = r.counted && r.entered ? money(r.cumulative) : '';
-      cells[6].textContent = money(r.cumTarget);
-      cells[7].textContent = money(r.lagging);
-      cells[7].className = `num ${r.lagging > 0 ? 'behind' : 'ahead'}`;
+      const td = tr.children;
+      td[4].innerHTML = r.entered ? money(r.total) : '<span class="dash">—</span>';
+      td[5].innerHTML = bar(
+        perDay ? Math.min((r.total / perDay) * 100, 100) : 0,
+        r.total >= perDay ? 'good' : 's1',
+      );
+      td[6].textContent = r.counted && r.entered ? money(r.cumulative) : '';
+      td[7].textContent = money(r.cumTarget);
+      td[8].className = `num ${r.lagging > 0 ? 'behind' : 'ahead'}`;
+      td[8].textContent =
+        r.counted && r.entered
+          ? `${money(Math.abs(r.lagging))} ${r.lagging > 0 ? 'behind' : 'ahead'}`
+          : '';
     });
 
-    renderFoot(view);
-    renderPlan(view);
-    renderMonthKpis(view);
+    const tfoot = el.monthGrid.querySelector('tfoot');
+    if (tfoot) tfoot.innerHTML = footRows(view);
+
+    renderRail(view);
     scheduleCharts(view);
   }
 
@@ -401,10 +547,7 @@ if (root) {
 
   function renderMonth() {
     const view = computeBudget(state.doc);
-    el.zipperPlan.value = state.doc.zipperPlan ? String(state.doc.zipperPlan) : '';
-    el.mtPlan.value = state.doc.mtPlan ? String(state.doc.mtPlan) : '';
-    renderPlan(view);
-    renderMonthKpis(view);
+    renderRail(view);
     renderMonthCharts(view);
     renderRows(view);
   }
@@ -537,7 +680,11 @@ if (root) {
 
   async function loadMonth(month: string) {
     state.month = month;
-    el.saveState.textContent = 'Loading…';
+    el.saveState.textContent = '';
+    // The shape holds while the month loads.
+    el.monthRail.innerHTML = skeleton.rail();
+    el.chartCumulative.innerHTML = skeleton.chart();
+    el.monthGrid.innerHTML = skeleton.table(9, 12);
     try {
       const res = await fetch(`/api/budget?month=${month}`);
       const data = await res.json();
@@ -559,6 +706,11 @@ if (root) {
   async function loadPeriod(view: 'fy' | 'ytd') {
     const query = view === 'fy' ? `fy=${el.fySelect.value}` : `ytd=${state.month}`;
     el.periodTitle.textContent = 'Loading…';
+    el.periodKpis.innerHTML = skeleton.chips(6);
+    el.periodRows.innerHTML = '';
+    el.chartMonths.innerHTML = skeleton.chart();
+    el.chartPeriodCum.innerHTML = skeleton.chart();
+    el.chartSplit.innerHTML = skeleton.chart(220);
     try {
       const res = await fetch(`/api/summary?${query}`);
       const data = await res.json();
@@ -687,18 +839,24 @@ if (root) {
 
   el.save.addEventListener('click', save);
 
-  for (const [input, key] of [
-    [el.zipperPlan, 'zipperPlan'],
-    [el.mtPlan, 'mtPlan'],
-  ] as const) {
-    input.addEventListener('input', () => {
-      state.doc[key] = Number(input.value) || 0;
-      markDirty();
-      updateDerived(computeBudget(state.doc));
-    });
-  }
+  // The plan fields are re-rendered with the rail, so they are bound by
+  // delegation rather than by reference.
+  el.monthRail.addEventListener('input', (event) => {
+    const input = event.target as HTMLInputElement;
+    const key = input.id === 'zipperPlan' ? 'zipperPlan' : input.id === 'mtPlan' ? 'mtPlan' : null;
+    if (!key) return;
 
-  el.rows.addEventListener('input', (event) => {
+    state.doc[key] = Number(input.value) || 0;
+    markDirty();
+
+    // Rebuilding the rail would destroy the field being typed in, so only the
+    // grid and chart refresh; the rail catches up on the next full render.
+    const view = computeBudget(state.doc);
+    renderRows(view);
+    scheduleCharts(view);
+  });
+
+  el.monthGrid.addEventListener('input', (event) => {
     const target = event.target as HTMLInputElement;
     if (!target.classList.contains('cell') && !target.classList.contains('date-input')) return;
     const i = Number(target.dataset.i);
@@ -726,7 +884,7 @@ if (root) {
 
   // A wheel over a focused number input changes it; scrolling the page should
   // never quietly edit a figure.
-  el.rows.addEventListener(
+  el.monthGrid.addEventListener(
     'wheel',
     (event) => {
       const target = event.target as HTMLElement;
@@ -737,7 +895,7 @@ if (root) {
     { passive: true },
   );
 
-  el.rows.addEventListener('click', (event) => {
+  el.monthGrid.addEventListener('click', (event) => {
     const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-del]');
     if (!btn) return;
     state.doc.days.splice(Number(btn.dataset.del), 1);

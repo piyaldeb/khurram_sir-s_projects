@@ -52,6 +52,8 @@ interface BudgetSummary {
   countedThrough: string | null;
 }
 
+import { skeleton } from '../lib/skeleton';
+
 const root = document.querySelector<HTMLElement>('.production');
 
 if (root) {
@@ -62,6 +64,7 @@ if (root) {
     next: $<HTMLButtonElement>('#day-next'),
     yesterday: $<HTMLButtonElement>('#day-yesterday'),
     refresh: $<HTMLButtonElement>('#day-refresh'),
+    dayLabel: $<HTMLElement>('#day-label'),
     rail: $<HTMLElement>('#day-rail'),
     chips: $<HTMLElement>('#group-chips'),
     grid: $<HTMLElement>('#day-grid'),
@@ -103,7 +106,7 @@ if (root) {
   interface Column {
     key: keyof InvoiceRow;
     label: string;
-    money?: boolean;
+    value?: boolean;
     /** Quantity columns are per-company units (PCS or GRS) and never add up. */
     unitised?: boolean;
   }
@@ -111,6 +114,8 @@ if (root) {
   interface Group {
     id: string;
     label: string;
+    /** Column header wording when it differs from the chip. */
+    groupLabel?: string;
     columns: Column[];
     on: boolean;
     tinted?: boolean;
@@ -124,7 +129,7 @@ if (root) {
       on: true,
       columns: [
         { key: 'packingQty', label: 'Qty', unitised: true },
-        { key: 'packingValue', label: 'Value', money: true },
+        { key: 'packingValue', label: 'Value', value: true },
       ],
     },
     {
@@ -133,18 +138,19 @@ if (root) {
       on: true,
       columns: [
         { key: 'pendingQty', label: 'Qty', unitised: true },
-        { key: 'pendingValue', label: 'Value', money: true },
+        { key: 'pendingValue', label: 'Value', value: true },
         { key: 'pendingOa', label: 'OA' },
       ],
     },
     {
       id: 'released',
-      label: 'Released yesterday',
+      label: 'Released',
+      groupLabel: 'Released yesterday',
       on: true,
       tinted: true,
       columns: [
         { key: 'todayReleasedQty', label: 'Qty', unitised: true },
-        { key: 'todayReleasedValue', label: 'Value', money: true },
+        { key: 'todayReleasedValue', label: 'Value', value: true },
       ],
     },
     {
@@ -153,7 +159,7 @@ if (root) {
       on: true,
       columns: [
         { key: 'cumProduction', label: 'Production', unitised: true },
-        { key: 'cumInvoicing', label: 'Invoicing', money: true },
+        { key: 'cumInvoicing', label: 'Invoiced', value: true },
       ],
     },
     {
@@ -162,7 +168,7 @@ if (root) {
       on: false,
       columns: [
         { key: 'cumReleasedQty', label: 'Qty', unitised: true },
-        { key: 'cumReleasedValue', label: 'Value', money: true },
+        { key: 'cumReleasedValue', label: 'Value', value: true },
       ],
     },
   ];
@@ -185,12 +191,12 @@ if (root) {
     const controller = new AbortController();
     inFlight = controller;
 
-    el.rail.innerHTML = '';
-    el.chips.hidden = true;
+    // Keep the page's shape while Odoo builds the report.
+    el.rail.innerHTML = skeleton.rail();
+    el.chips.hidden = false;
+    el.chips.innerHTML = skeleton.chips(5);
     el.note.textContent = '';
-    el.grid.innerHTML = `<div class="state"><h2><span class="spinner"></span> Reading Odoo</h2><p>Building the invoice report for ${esc(
-      longDate(date),
-    )}, once per company.</p></div>`;
+    el.grid.innerHTML = skeleton.table(10, 12);
 
     try {
       // The month's budget gives the day a target to be measured against.
@@ -369,8 +375,11 @@ if (root) {
        <button class="chip" type="button" id="grid-export">Export CSV</button>`;
   }
 
-  const cell = (col: Column, value: number) =>
-    value === 0 ? '' : col.money ? usd(value) : qty(value);
+  const cell = (col: Column, v: number, dashWhenZero = false) =>
+    v === 0 ? (dashWhenZero ? '<span class="dash">—</span>' : '') : col.value ? usd(v) : qty(v);
+
+  // In the released group a blank is ambiguous; an em dash says "nothing moved".
+  const releasedKeys = new Set<string>(['todayReleasedQty', 'todayReleasedValue']);
 
   function renderGrid(report: DayReport) {
     const live = report.companies.filter((c) => !c.error);
@@ -385,7 +394,7 @@ if (root) {
           .map(
             (g) =>
               `<th colspan="${g.columns.length}" class="group-head${g.tinted ? ' tinted' : ''}">${esc(
-                g.label,
+                g.groupLabel ?? g.label,
               )}</th>`,
           )
           .join('')}
@@ -413,10 +422,9 @@ if (root) {
       .map(({ company: c, rows: shown }) => {
         const heading = `<tr class="company-row">
           <td class="sticky-col" colspan="${span}">
-            <strong>${esc(c.name)}</strong>
-            <span class="rail-sub">${shown.length}${
+            ${esc(c.name)} · ${shown.length}${
               shown.length === c.rows.length ? '' : ` of ${c.rows.length}`
-            } products · quantities in ${esc(c.unit)}</span>
+            } products · ${esc(c.unit)}
           </td>
         </tr>`;
 
@@ -425,14 +433,19 @@ if (root) {
             (r) =>
               `<tr>
                 <td class="sticky-col">${esc(r.product)}</td>
-                ${columns.map((col) => `<td class="num">${cell(col, r[col.key] as number)}</td>`).join('')}
+                ${columns
+                  .map(
+                    (col) =>
+                      `<td class="num">${cell(col, r[col.key] as number, releasedKeys.has(col.key))}</td>`,
+                  )
+                  .join('')}
               </tr>`,
           )
           .join('');
 
         // The sheet's own TOTAL row, not a sum of what happens to be on screen.
         const total = `<tr class="total-row">
-          <td class="sticky-col">${esc(c.name)} total <span class="rail-sub">${
+          <td class="sticky-col">${esc(c.name)} total <span class="rail-sub">· ${
             c.rows.length
           } products${query ? ', whole sheet' : ''}</span></td>
           ${columns
@@ -444,12 +457,12 @@ if (root) {
       })
       .join('');
 
-    // Money adds across companies; quantities do not — Zipper counts in PCS and
+    // Value adds across companies; quantities do not — Zipper counts in PCS and
     // Metal Trims in GRS, so those cells name the units instead of summing.
     const units = [...new Set(live.map((c) => c.unit))];
     const grand = live.length > 1
       ? `<tr class="grand-row">
-          <td class="sticky-col">Both companies <span class="rail-sub">money only</span></td>
+          <td class="sticky-col">Both companies <span class="rail-sub">value only</span></td>
           ${columns
             .map((col) => {
               if (col.unitised) return `<td class="num units">${esc(units.join(' + '))}</td>`;
@@ -552,10 +565,23 @@ if (root) {
 
   /* -------------------------------------------------------------- events */
 
+  const pillDate = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          timeZone: 'UTC',
+        });
+  };
+
   const go = (date: string) => {
     const max = root.dataset.today ?? date;
     const clamped = date > max ? max : date;
     el.day.value = clamped;
+    el.dayLabel.textContent = pillDate(clamped);
     el.next.disabled = clamped >= max;
     void load(clamped);
   };

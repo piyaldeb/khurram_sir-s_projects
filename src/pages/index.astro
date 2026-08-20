@@ -37,11 +37,16 @@ const connectionLabel = session
       <div class="page-head-actions">
         <div class="period-picker">
           <button class="step" type="button" id="day-prev" aria-label="Previous day">‹</button>
-          <input type="date" id="day" value={date} max={today} />
+          <!-- A native date input renders in the browser's own locale format; the
+               label carries the wording and the input sits transparent over it. -->
+          <span class="date-field">
+            <span id="day-label">{date}</span>
+            <input type="date" id="day" value={date} max={today} aria-label="Date" />
+          </span>
           <button class="step" type="button" id="day-next" aria-label="Next day">›</button>
         </div>
         <button class="chip" type="button" id="day-yesterday">Yesterday</button>
-        <button class="btn" id="day-refresh" type="button">Refresh</button>
+        <button class="btn primary" id="day-refresh" type="button">Refresh</button>
       </div>
     </header>
 

@@ -28,14 +28,14 @@ const connectionLabel = session
       <div class="page-head-text">
         <p class="eyebrow">Manufacturing</p>
         <h1>Production ABC</h1>
-        <p class="lede">
-          A full fiscal year of packing production, valued in USD from the line prices and
-          ranked Pareto-style: class A carries the first 80% of value, B the next 15%, C the
-          tail — by product, buyer, customer and company.
-        </p>
       </div>
 
       <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Company" id="company-seg">
+          <button class="seg" type="button" role="tab" data-company="all" aria-selected="true">
+            All companies
+          </button>
+        </div>
         <div class="segmented" role="tablist" aria-label="Fiscal year">
           {fys.map((fy) => (
             <button
@@ -48,11 +48,6 @@ const connectionLabel = session
               {fyLabel(fy)}
             </button>
           ))}
-        </div>
-        <div class="segmented" role="tablist" aria-label="Company" id="company-seg">
-          <button class="seg" type="button" role="tab" data-company="all" aria-selected="true">
-            Both companies
-          </button>
         </div>
       </div>
     </header>
@@ -74,44 +69,26 @@ const connectionLabel = session
       </p>
     </div>
 
-    <div id="abc-body" hidden>
-      <div class="kpis" id="abc-kpis"></div>
+    <div class="day-layout" id="abc-body" hidden>
+      <!-- The rail carries the judgment; the grid carries every row. -->
+      <aside class="day-rail" id="abc-rail"></aside>
 
-      <div class="chart-grid">
-        <section class="panel card">
-          <div class="card-head">
-            <h2>Monthly production value</h2>
-            <span class="hint">Zipper and Metal Trims, stacked</span>
-          </div>
-          <div class="chart-host" id="chart-months"></div>
-        </section>
-        <section class="panel card">
-          <div class="card-head">
-            <h2>Top products</h2>
-            <span class="hint" id="hint-item"></span>
-          </div>
-          <div class="chart-host" id="chart-item"></div>
-        </section>
-      </div>
+      <section class="day-main">
+        <div class="chips-bar panel" id="abc-chips"></div>
 
-      <div class="chart-grid">
         <section class="panel card">
           <div class="card-head">
-            <h2>Top buyers</h2>
-            <span class="hint" id="hint-buyer"></span>
+            <h2>Pareto — value per item, cumulative share</h2>
+            <span class="hint" id="pareto-note"></span>
           </div>
-          <div class="chart-host" id="chart-buyer"></div>
+          <div class="chart-host" id="chart-pareto"></div>
         </section>
-        <section class="panel card">
-          <div class="card-head">
-            <h2>Top customers</h2>
-            <span class="hint" id="hint-customer"></span>
-          </div>
-          <div class="chart-host" id="chart-customer"></div>
-        </section>
-      </div>
 
-      <div id="abc-tables"></div>
+        <div class="panel card day-card" style="margin-top:16px">
+          <div class="table-scroll" id="abc-grid" style="max-height:none"></div>
+        </div>
+        <p class="hint" id="abc-note"></p>
+      </section>
     </div>
   </main>
 

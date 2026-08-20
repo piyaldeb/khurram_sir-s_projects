@@ -86,16 +86,6 @@ const connectionLabel = session
       </div>
     </header>
 
-    <div class="syncbar panel" id="syncbar">
-      <span class="sync-dot" id="sync-dot"></span>
-      <div class="sync-text">
-        <strong id="sync-title">Checking Odoo…</strong>
-        <span class="hint" id="sync-note">Last synced —</span>
-      </div>
-      <div class="toolbar-spacer"></div>
-      <button class="btn" id="sync-now" type="button">Sync now</button>
-    </div>
-
     {
       odooError && (
         <div class="panel state error banner">
@@ -110,78 +100,41 @@ const connectionLabel = session
 
     <!-- ------------------------------------------------------------- month -->
     <section id="view-month">
-      <div class="toolbar panel">
-        <div class="field">
-          <label for="zipperPlan">Zipper Plan <span class="input-flag">input</span></label>
-          <input type="number" id="zipperPlan" min="0" step="1000" />
-        </div>
-        <div class="field">
-          <label for="mtPlan">MT Plan <span class="input-flag">input</span></label>
-          <input type="number" id="mtPlan" min="0" step="1000" />
-        </div>
-        <div class="toolbar-spacer"></div>
-        <span class="save-state" id="save-state"></span>
-        <button class="btn" id="export" type="button">Export CSV</button>
-        <button class="btn primary" id="save" type="button">Save</button>
-      </div>
+      <div class="day-layout">
+        <aside class="day-rail" id="month-rail"></aside>
 
-      <div class="kpis" id="budget-kpis"></div>
-
-      <div class="chart-grid">
-        <section class="panel card">
-          <div class="card-head">
-            <h2>Cumulative production vs target</h2>
-            <span class="hint">Working days of the month</span>
+        <section class="day-main">
+          <div class="syncbar panel" id="syncbar" data-state="quiet">
+            <span class="sync-dot" id="sync-dot"></span>
+            <div class="sync-text">
+              <strong id="sync-title"></strong>
+              <span class="hint" id="sync-note"></span>
+            </div>
+            <div class="toolbar-spacer"></div>
+            <span class="save-state" id="save-state"></span>
+            <button class="btn" id="sync-now" type="button">Sync now</button>
+            <button class="btn primary" id="save" type="button">Save</button>
           </div>
-          <div class="chart-host" id="chart-cumulative"></div>
-        </section>
-        <section class="panel card">
-          <div class="card-head">
-            <h2>Daily production</h2>
-            <span class="hint">Zipper and Metal Trims, stacked</span>
-          </div>
-          <div class="chart-host" id="chart-daily"></div>
-        </section>
-      </div>
 
-      <div class="budget-grid">
-        <section class="panel card plan-card">
-          <div class="card-head"><h2>Plan</h2></div>
-          <table class="plan"><tbody id="plan-rows"></tbody></table>
+          <section class="panel card">
+            <div class="card-head">
+              <h2>Cumulative production against target</h2>
+              <span class="hint" id="chart-note"></span>
+            </div>
+            <div class="chart-host" id="chart-cumulative"></div>
+          </section>
+
+          <div class="panel card day-card" style="margin-top:16px">
+            <div class="table-scroll" id="month-grid" style="max-height:none"></div>
+          </div>
+
+          <p class="hint" id="month-note"></p>
+
           <div class="presets">
             <button class="chip" type="button" id="reset-days">Reset calendar</button>
             <button class="chip" type="button" id="drop-empty">Drop non-producing days</button>
             <button class="chip" type="button" id="add-day">Add a day</button>
-          </div>
-        </section>
-
-        <section class="panel card results">
-          <div class="results-bar">
-            <strong id="days-title">Working days</strong>
-            <span class="hint" id="days-hint"></span>
-            <div class="toolbar-spacer"></div>
-            <span class="hint">
-              Type into Zipper Prod or MT Prod to model a figure — Sync now puts Odoo's back
-            </span>
-          </div>
-          <div class="table-scroll" style="max-height:none">
-            <table class="grid budget-table">
-              <thead>
-                <tr>
-                  <th>Working Day</th>
-                  <th>Date</th>
-                  <th>Zipper Prod</th>
-                  <th>MT Prod</th>
-                  <th>Total</th>
-                  <th>Cumu Prod</th>
-                  <th>Cum target</th>
-                  <th>Cum Target Lagging</th>
-                  <th aria-label="Remove"></th>
-                </tr>
-              </thead>
-              <tbody id="budget-rows"></tbody>
-              <tfoot id="budget-foot"></tfoot>
-            </table>
+            <button class="chip" type="button" id="export">Export CSV</button>
           </div>
         </section>
       </div>
