@@ -117,7 +117,10 @@ function isFresh(entry: MonthPacking): boolean {
   if (entry.error) {
     return Date.now() - new Date(entry.fetchedAt).getTime() < FRESH_MINUTES * 60_000;
   }
+  // A closed month never changes; a future month has nothing to change into.
   if (entry.month < currentMonth()) return true;
+  if (entry.month > currentMonth()) return true;
+  // Only the month in progress ages out.
   return Date.now() - new Date(entry.fetchedAt).getTime() < FRESH_MINUTES * 60_000;
 }
 
@@ -137,6 +140,13 @@ async function fetchMonth(month: string, company: OdooCompany): Promise<MonthPac
     byCustomer: {},
     fetchedAt: new Date().toISOString(),
   };
+
+  // A month that has not started cannot have produced anything; asking Odoo
+  // for it costs a full report build and always comes back empty.
+  if (month > currentMonth()) {
+    await writeCache(entry);
+    return entry;
+  }
 
   try {
     const artifact = await generateReport({
