@@ -1,3 +1,5 @@
+import { env } from './env';
+
 /**
  * Minimal Odoo web-session client (JSON-RPC + HTTP controllers).
  *
@@ -35,10 +37,6 @@ export class OdooError extends Error {
   }
 }
 
-const env = (key: string, fallback = ''): string =>
-  // process.env wins so a built server picks up runtime values (see the
-  // `preview` script, which loads .env with node --env-file).
-  process.env[key] || ((import.meta as any).env?.[key] as string | undefined) || fallback;
 
 export const config = {
   get url() {

@@ -22,6 +22,10 @@ export default defineConfig({
     ? vercel({
         // Odoo builds these reports slowly; the default 10s is not enough.
         maxDuration: 60,
+        // The adapter copies project files into the function bundle; .env is
+        // not one that should travel. Configuration comes from the platform's
+        // own environment variables.
+        excludeFiles: ['./.env', './.env.example'],
       })
     : node({ mode: 'standalone' }),
   server: { port: Number(process.env.PORT ?? 4321), host: true },

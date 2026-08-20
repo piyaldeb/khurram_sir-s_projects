@@ -1,0 +1,14 @@
+# Never upload secrets or business data to the build.
+.env
+.env.*
+!.env.example
+
+*.har
+*.xlsx
+data/
+data.local-backup/
+
+node_modules
+dist
+.astro
+.git

@@ -12,3 +12,4 @@ dist/
 # Root-only: src/data/ holds plan-calendar.json, which the app imports.
 /data/
 /data.local-backup/
+.vercel

@@ -1,3 +1,5 @@
+import { env } from './env';
+
 /**
  * Supabase (PostgREST) access for the data Odoo does not hold — the budget
  * months: plans, working calendars, and the production figures fetched from
@@ -8,7 +10,6 @@
  * leaves the server and the table can stay locked down (RLS on, no policies).
  */
 
-const env = (key: string): string => process.env[key] || ((import.meta as any).env?.[key] ?? '');
 
 export const supabaseConfig = {
   get url() {
