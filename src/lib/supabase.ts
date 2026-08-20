@@ -21,6 +21,9 @@ export const supabaseConfig = {
   get table() {
     return env('SUPABASE_TABLE') || 'budget_months';
   },
+  get cacheTable() {
+    return env('SUPABASE_CACHE_TABLE') || 'app_cache';
+  },
   get enabled() {
     return !!(this.url && this.key);
   },
@@ -67,9 +70,11 @@ async function rest(path: string, init: RequestInit = {}): Promise<Response> {
     } catch {
       /* keep the raw text */
     }
-    if (res.status === 404 || /does not exist/i.test(detail)) {
+    if (res.status === 404 || /does not exist|schema cache/i.test(detail)) {
+      // Name the table that is actually missing, not whichever one is default.
+      const missing = /'public\.([\w]+)'/.exec(detail)?.[1] ?? path.split('?')[0].replace('/', '');
       throw new SupabaseError(
-        `Table "${supabaseConfig.table}" is missing — run \`npm run db:setup\`. (${detail})`,
+        `Table "${missing}" is missing — run \`npm run db:create\` to apply db/schema.sql. (${detail})`,
         res.status,
       );
     }
@@ -124,4 +129,23 @@ export async function ping(): Promise<{ ok: true; rows: number }> {
   const range = res.headers.get('content-range') ?? '';
   const total = Number(range.split('/')[1]);
   return { ok: true, rows: Number.isFinite(total) ? total : 0 };
+}
+
+
+/* ------------------------------------------------------------ generic cache */
+
+export async function cacheGetMany<T>(keys: string[]): Promise<Map<string, T>> {
+  if (!keys.length) return new Map();
+  const list = keys.map((k) => `"${k}"`).join(',');
+  const res = await rest(`/${supabaseConfig.cacheTable}?select=key,doc&key=in.(${list})`);
+  const rows = (await res.json()) as { key: string; doc: T }[];
+  return new Map(rows.map((r) => [r.key, r.doc]));
+}
+
+export async function cacheSet(key: string, doc: unknown): Promise<void> {
+  await rest(`/${supabaseConfig.cacheTable}`, {
+    method: 'POST',
+    headers: { prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ key, doc, updated_at: new Date().toISOString() }),
+  });
 }

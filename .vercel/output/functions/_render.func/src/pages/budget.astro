@@ -1,0 +1,262 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+import { fyLabel, fyOf, monthLabel } from '../lib/budget';
+import { availableFiscalYears, availableMonths } from '../lib/summary';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const now = new Date();
+const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+const months = availableMonths();
+const month = months.includes(thisMonth) ? thisMonth : (months[0] ?? thisMonth);
+const fiscalYears = availableFiscalYears();
+const currentFy = fyOf(month);
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+---
+
+<Base
+  title={`Budget follow-up · ${monthLabel(month)}`}
+  connected={!!session}
+  connectionLabel={connectionLabel}
+>
+  <main
+    class="main budget"
+    data-month={month}
+    data-fy={String(currentFy)}
+    data-odoo={session ? '1' : ''}
+  >
+    <header class="page-head">
+      <div class="page-head-text">
+        <p class="eyebrow">Manufacturing</p>
+        <h1>Budget vs Achievement</h1>
+        <p class="lede" id="page-lede">
+          Targets and the working calendar come from the planning workbook. Production is read
+          live from Odoo.
+        </p>
+      </div>
+
+      <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Period">
+          <button class="seg" type="button" role="tab" data-view="month" aria-selected="true">
+            Month
+          </button>
+          <button class="seg" type="button" role="tab" data-view="fy" aria-selected="false">
+            Fiscal year
+          </button>
+          <button class="seg" type="button" role="tab" data-view="ytd" aria-selected="false">
+            Year to date
+          </button>
+        </div>
+
+        <div class="period-picker" id="picker-month">
+          <button class="step" type="button" id="month-prev" aria-label="Previous month">‹</button>
+          <select id="month-select" aria-label="Month">
+            {months.map((m) => (
+              <option value={m} selected={m === month}>
+                {monthLabel(m)}
+              </option>
+            ))}
+          </select>
+          <button class="step" type="button" id="month-next" aria-label="Next month">›</button>
+        </div>
+
+        <div class="period-picker" id="picker-fy" hidden>
+          <select id="fy-select" aria-label="Fiscal year">
+            {fiscalYears.map((fy) => (
+              <option value={String(fy)} selected={fy === currentFy}>
+                {fyLabel(fy)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <div class="syncbar panel" id="syncbar">
+      <span class="sync-dot" id="sync-dot"></span>
+      <div class="sync-text">
+        <strong id="sync-title">Checking Odoo…</strong>
+        <span class="hint" id="sync-note">Last synced —</span>
+      </div>
+      <div class="toolbar-spacer"></div>
+      <button class="btn" id="sync-now" type="button">Sync now</button>
+    </div>
+
+    {
+      odooError && (
+        <div class="panel state error banner">
+          <h2>Odoo is not connected</h2>
+          <p>
+            {odooError} Production figures stay empty until the connection works; targets and the
+            working calendar still come from the workbook.
+          </p>
+        </div>
+      )
+    }
+
+    <!-- ------------------------------------------------------------- month -->
+    <section id="view-month">
+      <div class="toolbar panel">
+        <div class="field">
+          <label for="zipperPlan">Zipper Plan <span class="input-flag">input</span></label>
+          <input type="number" id="zipperPlan" min="0" step="1000" />
+        </div>
+        <div class="field">
+          <label for="mtPlan">MT Plan <span class="input-flag">input</span></label>
+          <input type="number" id="mtPlan" min="0" step="1000" />
+        </div>
+        <div class="toolbar-spacer"></div>
+        <span class="save-state" id="save-state"></span>
+        <button class="btn" id="export" type="button">Export CSV</button>
+        <button class="btn primary" id="save" type="button">Save</button>
+      </div>
+
+      <div class="kpis" id="budget-kpis"></div>
+
+      <div class="chart-grid">
+        <section class="panel card">
+          <div class="card-head">
+            <h2>Cumulative production vs target</h2>
+            <span class="hint">Working days of the month</span>
+          </div>
+          <div class="chart-host" id="chart-cumulative"></div>
+        </section>
+        <section class="panel card">
+          <div class="card-head">
+            <h2>Daily production</h2>
+            <span class="hint">Zipper and Metal Trims, stacked</span>
+          </div>
+          <div class="chart-host" id="chart-daily"></div>
+        </section>
+      </div>
+
+      <div class="budget-grid">
+        <section class="panel card plan-card">
+          <div class="card-head"><h2>Plan</h2></div>
+          <table class="plan"><tbody id="plan-rows"></tbody></table>
+          <div class="presets">
+            <button class="chip" type="button" id="reset-days">Reset calendar</button>
+            <button class="chip" type="button" id="drop-empty">Drop non-producing days</button>
+            <button class="chip" type="button" id="add-day">Add a day</button>
+          </div>
+        </section>
+
+        <section class="panel card results">
+          <div class="results-bar">
+            <strong id="days-title">Working days</strong>
+            <span class="hint" id="days-hint"></span>
+            <div class="toolbar-spacer"></div>
+            <span class="hint">
+              Type into Zipper Prod or MT Prod to model a figure — Sync now puts Odoo's back
+            </span>
+          </div>
+          <div class="table-scroll" style="max-height:none">
+            <table class="grid budget-table">
+              <thead>
+                <tr>
+                  <th>Working Day</th>
+                  <th>Date</th>
+                  <th>Zipper Prod</th>
+                  <th>MT Prod</th>
+                  <th>Total</th>
+                  <th>Cumu Prod</th>
+                  <th>Cum target</th>
+                  <th>Cum Target Lagging</th>
+                  <th aria-label="Remove"></th>
+                </tr>
+              </thead>
+              <tbody id="budget-rows"></tbody>
+              <tfoot id="budget-foot"></tfoot>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------- fy  /  ytd -->
+    <section id="view-period" hidden>
+      <div class="toolbar panel">
+        <div>
+          <strong id="period-heading">Fiscal year</strong>
+          <p class="hint" id="period-sub" style="margin:2px 0 0">
+            Months without production have not been fetched from Odoo yet.
+          </p>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <span class="save-state" id="period-state"></span>
+        <button class="btn" id="backfill" type="button">Re-fetch this year</button>
+      </div>
+
+      <div class="kpis" id="period-kpis"></div>
+
+      <div class="chart-grid">
+        <section class="panel card">
+          <div class="card-head">
+            <h2>Monthly achievement against budget</h2>
+            <span class="hint">Budget shown as the neutral reference</span>
+          </div>
+          <div class="chart-host" id="chart-months"></div>
+        </section>
+        <section class="panel card">
+          <div class="card-head">
+            <h2>Cumulative achievement vs budget</h2>
+            <span class="hint">Running totals across the year</span>
+          </div>
+          <div class="chart-host" id="chart-period-cum"></div>
+        </section>
+      </div>
+
+      <section class="panel card">
+        <div class="card-head">
+          <h2>Split by company</h2>
+          <span class="hint">Zipper and Metal Trims per month</span>
+        </div>
+        <div class="chart-host" id="chart-split"></div>
+      </section>
+
+      <section class="panel card results" style="margin-top:16px">
+        <div class="results-bar">
+          <strong id="period-title">Months</strong>
+          <div class="toolbar-spacer"></div>
+          <button class="chip" type="button" id="period-export">Export CSV</button>
+        </div>
+        <div class="table-scroll" style="max-height:none">
+          <table class="grid period-table">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Zipper Plan</th>
+                <th>MT Plan</th>
+                <th>Budget</th>
+                <th>Zipper Done</th>
+                <th>MT Done</th>
+                <th>Achievement</th>
+                <th>Achieved %</th>
+                <th>Gap</th>
+                <th>Days</th>
+              </tr>
+            </thead>
+            <tbody id="period-rows"></tbody>
+            <tfoot id="period-foot"></tfoot>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="../scripts/budget.ts"></script>
+</Base>

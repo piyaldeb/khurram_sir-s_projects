@@ -43,6 +43,10 @@ export interface AnalyticsResult {
   byMonth: MonthPoint[];
   /** Months whose fetch failed — their figures are missing, not zero. */
   failed: { month: string; company: string; error: string }[];
+  /** Months still to fetch. Non-empty means the figures below are partial. */
+  pending: { month: string; company: string }[];
+  /** True once nothing is pending. */
+  ready: boolean;
   generatedAt: string;
 }
 
@@ -83,9 +87,10 @@ function merge(
 export async function fiscalYearAnalytics(
   fy: number,
   companyFilter: number | 'all' = 'all',
+  budget?: number,
 ): Promise<AnalyticsResult> {
   const months = fyMonths(fy);
-  const all = await rangePacking(months);
+  const { months: all, pending } = await rangePacking(months, budget);
 
   const companies = new Map<number, { id: number; name: string; value: number; lines: number }>();
   for (const m of all) {
@@ -125,6 +130,8 @@ export async function fiscalYearAnalytics(
     failed: all
       .filter((m) => m.error)
       .map((m) => ({ month: m.month, company: m.companyName, error: m.error! })),
+    pending,
+    ready: pending.length === 0,
     generatedAt: new Date().toISOString(),
   };
 }

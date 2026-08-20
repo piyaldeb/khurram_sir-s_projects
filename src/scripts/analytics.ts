@@ -29,6 +29,8 @@ interface AnalyticsResult {
   byCustomer: AbcDimension;
   byMonth: { month: string; byCompany: Record<number, number>; total: number }[];
   failed: { month: string; company: string; error: string }[];
+  pending: { month: string; company: string }[];
+  ready: boolean;
 }
 
 const root = document.querySelector<HTMLElement>('.abc');
@@ -72,13 +74,21 @@ if (root) {
 
   let inFlight: AbortController | null = null;
 
-  async function load() {
+  /**
+   * A cold year needs ~24 Odoo reports, far more than one request can do, so
+   * the server fills a few at a time and this keeps asking until nothing is
+   * pending — showing whatever is already there in the meantime.
+   */
+  async function load(showSpinner = true) {
     inFlight?.abort();
     const controller = new AbortController();
     inFlight = controller;
 
-    el.body.hidden = true;
-    el.status.hidden = false;
+    if (showSpinner) {
+      el.body.hidden = true;
+      el.status.hidden = false;
+      el.status.classList.remove('error');
+    }
 
     try {
       const res = await fetch(`/api/analytics?fy=${state.fy}&company=${state.company}`, {
@@ -86,10 +96,19 @@ if (root) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
-      state.result = data as AnalyticsResult;
+
+      const result = data as AnalyticsResult;
+      const wantedFy = state.fy;
+      state.result = result;
       render();
+
+      if (!result.ready && wantedFy === state.fy) {
+        // Straight on to the next batch; the page stays usable throughout.
+        void load(false);
+      }
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
+      el.status.hidden = false;
       el.status.innerHTML = `<h2>Could not build the analysis</h2><p style="font-family:var(--mono);font-size:12.5px">${esc(
         (err as Error).message,
       )}</p>`;
@@ -156,9 +175,16 @@ if (root) {
       }),
     );
 
-    el.status.hidden = true;
+    el.status.hidden = r.ready;
     el.status.classList.remove('error');
     el.body.hidden = false;
+
+    if (!r.ready) {
+      const done = r.months.length * Math.max(r.companies.length, 1) - r.pending.length;
+      const total = done + r.pending.length;
+      el.status.innerHTML = `<h2><span class="spinner"></span> Loading the rest of the year</h2>
+        <p>${done} of ${total} monthly reports read. The figures below fill in as they arrive.</p>`;
+    }
 
     if (r.failed.length) {
       el.tables.insertAdjacentHTML(

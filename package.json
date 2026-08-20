@@ -16,10 +16,11 @@
   "dependencies": {
     "@astrojs/check": "^0.9.10",
     "@astrojs/node": "^9.2.2",
+    "@astrojs/vercel": "^8.2.11",
     "astro": "^5.13.2",
     "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
     "postgres": "^3.4.9",
-    "typescript": "^5.9.3",
-    "jszip": "^3.10.1"
+    "typescript": "^5.9.3"
   }
 }

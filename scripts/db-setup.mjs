@@ -1,14 +1,16 @@
 /**
  * Supabase setup + migration:  npm run db:setup
  *
- *   1. checks SUPABASE_URL, and prompts for the service-role key if it is missing
- *   2. checks the budget_months table exists (prints the SQL to run if not)
- *   3. copies any month files under data/ into the table
+ *   1. checks SUPABASE_URL, prompting for the service-role key if it is missing
+ *   2. checks both tables exist, offering to create them from db/schema.sql
+ *   3. copies data/budget-*.json        into budget_months
+ *   4. copies data/analytics/*.json     into app_cache
  *
- * The key is asked for here rather than hand-edited into .env so it never lands
- * in shell history. Nothing else is written except the month documents.
+ * Secrets are asked for here rather than hand-edited into .env so they never
+ * land in shell history. Only the service-role key is written to .env; the
+ * database password is used for one connection and discarded.
  */
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -30,6 +32,7 @@ try {
 const URL_BASE = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 let KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '';
 const TABLE = process.env.SUPABASE_TABLE || 'budget_months';
+const CACHE_TABLE = process.env.SUPABASE_CACHE_TABLE || 'app_cache';
 const REF = /https:\/\/([a-z0-9]+)\.supabase\.co/.exec(URL_BASE)?.[1] ?? '';
 
 const ok = (m) => console.log(`  \x1b[32mok\x1b[0m    ${m}`);
@@ -87,6 +90,26 @@ const rest = (path, init = {}) =>
   });
 
 const countOf = (res) => Number((res.headers.get('content-range') ?? '').split('/')[1]) || 0;
+const probe = () =>
+  Promise.all([
+    rest(`/${TABLE}?select=month&limit=1`, { headers: { prefer: 'count=exact' } }),
+    rest(`/${CACHE_TABLE}?select=key&limit=1`, { headers: { prefer: 'count=exact' } }),
+  ]);
+
+/** Upserts rows into a table, reporting how many landed. */
+async function upsertAll(table, rows, label) {
+  let moved = 0;
+  for (const row of rows) {
+    const put = await rest(`/${table}`, {
+      method: 'POST',
+      headers: { prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(row),
+    });
+    if (put.ok) moved++;
+    else bad(`${row.month ?? row.key} — ${(await put.text()).slice(0, 120)}`);
+  }
+  ok(`${moved} of ${rows.length} ${label} written`);
+}
 
 console.log(`\nSupabase setup\n${'─'.repeat(52)}`);
 
@@ -105,25 +128,26 @@ if (!URL_BASE || !KEY) {
   process.exit(1);
 }
 
-console.log('\n2. Table');
-let res;
+console.log('\n2. Tables');
+let budgetRes;
+let cacheRes;
 try {
-  res = await rest(`/${TABLE}?select=month&limit=1`, { headers: { prefer: 'count=exact' } });
+  [budgetRes, cacheRes] = await probe();
 } catch (err) {
   bad(`cannot reach Supabase — ${err.cause?.code ?? err.message}`);
   info('Check SUPABASE_URL and the network.');
   process.exit(1);
 }
 
-if (!res.ok) {
-  const body = await res.text();
-  bad(`table "${TABLE}" is not there yet (HTTP ${res.status})`);
+if (!budgetRes.ok || !cacheRes.ok) {
+  if (!budgetRes.ok) bad(`table "${TABLE}" is not there yet`);
+  if (!cacheRes.ok) bad(`table "${CACHE_TABLE}" is not there yet`);
 
-  // Offer to create it over a direct Postgres connection rather than making
-  // anyone paste SQL into a dashboard.
+  // Create them over a direct Postgres connection rather than making anyone
+  // paste SQL into a dashboard. schema.sql is idempotent.
   let created = false;
   if (stdin.isTTY && REF) {
-    console.log(dim('\n  I can create it now. That needs the database password'));
+    console.log(dim('\n  I can create them now. That needs the database password'));
     console.log(dim('  (Settings > Database). It is used for this one connection'));
     console.log(dim('  and is not saved anywhere.\n'));
     const password = process.env.SUPABASE_DB_PASSWORD || (await promptSecret('database password'));
@@ -138,7 +162,7 @@ if (!res.ok) {
   }
 
   if (!created) {
-    console.log('\nOr create it by hand in the SQL editor:');
+    console.log('\nOr create them by hand in the SQL editor:');
     if (REF) console.log(`  ${cyan(`https://supabase.com/dashboard/project/${REF}/sql/new`)}`);
     console.log('\nCopy the SQL to the clipboard with:');
     console.log(`  ${cyan('type db\\schema.sql | clip')}   ${dim('(PowerShell / cmd)')}`);
@@ -148,49 +172,65 @@ if (!res.ok) {
     process.exit(1);
   }
 
-  // PostgREST caches the schema; nudge it so the new table is visible.
+  // PostgREST caches the schema; nudge it so the new tables are visible.
   await fetch(`${URL_BASE}/rest/v1/`, { headers: { apikey: KEY } }).catch(() => {});
-  res = await rest(`/${TABLE}?select=month&limit=1`, { headers: { prefer: 'count=exact' } });
-  if (!res.ok) {
-    bad('created, but PostgREST has not picked it up yet — wait a moment and re-run.');
+  [budgetRes, cacheRes] = await probe();
+  if (!budgetRes.ok || !cacheRes.ok) {
+    bad('created, but PostgREST has not picked them up yet — wait a moment and re-run.');
     process.exit(1);
   }
 }
 
-ok(`table "${TABLE}" is reachable — ${countOf(res)} rows`);
+ok(`"${TABLE}" is reachable — ${countOf(budgetRes)} rows`);
+ok(`"${CACHE_TABLE}" is reachable — ${countOf(cacheRes)} rows`);
 
-console.log('\n3. Migrating local month files');
-let files = [];
+console.log('\n3. Budget months');
+let budgetFiles = [];
 try {
-  files = readdirSync(join(root, 'data')).filter((f) => /^budget-\d{4}-\d{2}\.json$/.test(f));
+  budgetFiles = readdirSync(join(root, 'data')).filter((f) => /^budget-\d{4}-\d{2}\.json$/.test(f));
 } catch {
   /* no data directory */
 }
 
-if (!files.length) {
+if (!budgetFiles.length) {
   info('nothing under data/ to migrate');
 } else {
-  let moved = 0;
-  for (const file of files.sort()) {
-    const month = /budget-(\d{4}-\d{2})\.json/.exec(file)[1];
-    const doc = JSON.parse(readFileSync(join(root, 'data', file), 'utf8'));
-    const put = await rest(`/${TABLE}`, {
-      method: 'POST',
-      headers: { prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ month, doc, updated_at: doc.updatedAt ?? new Date().toISOString() }),
-    });
-    if (put.ok) {
-      moved++;
-      const days = (doc.days ?? []).filter((d) => (d.zipper ?? 0) + (d.mt ?? 0) > 0).length;
-      ok(`${month} — ${days} producing days`);
-    } else {
-      bad(`${month} — ${(await put.text()).slice(0, 140)}`);
-    }
-  }
-  info(`${moved} of ${files.length} months written`);
+  await upsertAll(
+    TABLE,
+    budgetFiles.sort().map((file) => {
+      const doc = JSON.parse(readFileSync(join(root, 'data', file), 'utf8'));
+      return {
+        month: /budget-(\d{4}-\d{2})\.json/.exec(file)[1],
+        doc,
+        updated_at: doc.updatedAt ?? new Date().toISOString(),
+      };
+    }),
+    'months',
+  );
 }
 
-const after = await rest(`/${TABLE}?select=month&limit=1`, { headers: { prefer: 'count=exact' } });
+console.log('\n4. Analytics cache');
+const analyticsDir = join(root, 'data', 'analytics');
+if (!existsSync(analyticsDir)) {
+  info('nothing under data/analytics to migrate');
+} else {
+  const files = readdirSync(analyticsDir).filter((f) => f.endsWith('.json'));
+  await upsertAll(
+    CACHE_TABLE,
+    files.sort().map((file) => {
+      const doc = JSON.parse(readFileSync(join(analyticsDir, file), 'utf8'));
+      return {
+        key: file.replace(/\.json$/, ''),
+        doc,
+        updated_at: doc.fetchedAt ?? new Date().toISOString(),
+      };
+    }),
+    'cached months',
+  );
+}
 
+const [afterBudget, afterCache] = await probe();
 console.log(`\n${'─'.repeat(52)}`);
-console.log(`Supabase now holds ${countOf(after)} months. The site will use it automatically.\n`);
+console.log(
+  `Supabase now holds ${countOf(afterBudget)} budget months and ${countOf(afterCache)} cached analytics months.\n`,
+);

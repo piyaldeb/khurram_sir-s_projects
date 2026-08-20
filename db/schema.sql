@@ -21,3 +21,18 @@ alter table public.budget_months enable row level security;
 
 comment on table public.budget_months is
   'Monthly budget vs achievement documents for the manufacturing report site.';
+
+
+-- Cached aggregates that are expensive to rebuild — currently the monthly
+-- packing roll-ups behind the ABC analytics. Values are derived from Odoo and
+-- can be dropped at any time; the app refetches what is missing.
+create table if not exists public.app_cache (
+  key         text primary key,
+  doc         jsonb not null,
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.app_cache enable row level security;
+
+comment on table public.app_cache is
+  'Derived aggregates cached from Odoo. Safe to truncate.';

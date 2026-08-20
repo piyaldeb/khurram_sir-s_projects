@@ -24,7 +24,10 @@ export const GET: APIRoute = async ({ url }) => {
   }
 
   try {
-    return json(await fiscalYearAnalytics(fy, company));
+    const budget = Number(url.searchParams.get('batch'));
+    return json(
+      await fiscalYearAnalytics(fy, company, Number.isFinite(budget) && budget > 0 ? budget : undefined),
+    );
   } catch (err) {
     const message = err instanceof OdooError ? err.message : (err as Error).message;
     return json({ error: message }, 502);

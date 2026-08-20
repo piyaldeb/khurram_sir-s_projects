@@ -16,9 +16,19 @@ import { dirname, join, resolve } from 'node:path';
 import { getSession, productionCompanies, type OdooCompany } from './odoo';
 import { generateReport } from './reports';
 import { parseWorkbook, type SheetCell } from './xlsx';
+import { cacheGetMany, cacheSet, supabaseConfig } from './supabase';
 
 const CACHE_DIR = resolve(process.env.DATA_DIR || 'data', 'analytics');
 const FRESH_MINUTES = Number(process.env.ODOO_SYNC_FRESH_MINUTES || 15);
+
+/**
+ * How many months one request may fetch from Odoo.
+ *
+ * Each month is a report Odoo takes several seconds to build, and a serverless
+ * function has a hard ceiling — so a cold year is filled over several requests
+ * instead of one long one. The page polls until nothing is pending.
+ */
+export const FETCH_BUDGET = Number(process.env.ANALYTICS_FETCH_PER_REQUEST || 4);
 
 export interface DimEntry {
   value: number;
@@ -44,21 +54,60 @@ function currentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function cachePath(month: string, companyId: number): string {
+const cacheKey = (month: string, companyId: number) => {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new Error(`bad month "${month}"`);
-  return join(CACHE_DIR, `packing-${month}-c${companyId}.json`);
+  return `packing-${month}-c${companyId}`;
+};
+
+function cachePath(key: string): string {
+  return join(CACHE_DIR, `${key}.json`);
 }
 
-async function readCache(month: string, companyId: number): Promise<MonthPacking | null> {
-  try {
-    return JSON.parse(await readFile(cachePath(month, companyId), 'utf8')) as MonthPacking;
-  } catch {
-    return null;
+/**
+ * Cache reads and writes go to Supabase when it is configured, and to disk
+ * otherwise. Serverless has no writable filesystem, so on Vercel the Supabase
+ * path is the only one that works.
+ */
+async function readCacheMany(keys: string[]): Promise<Map<string, MonthPacking>> {
+  if (supabaseConfig.enabled) {
+    try {
+      return await cacheGetMany<MonthPacking>(keys);
+    } catch (err) {
+      // A missing or unreachable cache makes this slower, not broken.
+      warnCacheOnce((err as Error).message);
+      return new Map();
+    }
   }
+
+  const out = new Map<string, MonthPacking>();
+  for (const key of keys) {
+    try {
+      out.set(key, JSON.parse(await readFile(cachePath(key), 'utf8')) as MonthPacking);
+    } catch {
+      /* not cached */
+    }
+  }
+  return out;
+}
+
+let cacheWarned = false;
+function warnCacheOnce(message: string) {
+  if (cacheWarned) return;
+  cacheWarned = true;
+  console.warn(`[packing] cache unavailable, falling back to refetching: ${message}`);
 }
 
 async function writeCache(entry: MonthPacking): Promise<void> {
-  const path = cachePath(entry.month, entry.companyId);
+  const key = cacheKey(entry.month, entry.companyId);
+  if (supabaseConfig.enabled) {
+    try {
+      await cacheSet(key, entry);
+    } catch (err) {
+      warnCacheOnce((err as Error).message);
+    }
+    return;
+  }
+  const path = cachePath(key);
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(entry), 'utf8');
 }
@@ -144,43 +193,57 @@ async function fetchMonth(month: string, company: OdooCompany): Promise<MonthPac
 }
 
 /**
- * A month's aggregate for one company, from cache when it is still valid.
- * Concurrent identical requests share one fetch.
+ * Monthly aggregates for a range, filling at most `budget` missing months from
+ * Odoo. Anything still missing comes back in `pending` so the caller can ask
+ * again — that keeps every request inside a serverless timeout.
  */
-const inFlight = new Map<string, Promise<MonthPacking>>();
-
-export async function monthPacking(month: string, company: OdooCompany): Promise<MonthPacking> {
-  const cached = await readCache(month, company.id);
-  if (cached && isFresh(cached)) return cached;
-
-  const key = `${month}:${company.id}`;
-  const running = inFlight.get(key);
-  if (running) return running;
-
-  const promise = fetchMonth(month, company).finally(() => inFlight.delete(key));
-  inFlight.set(key, promise);
-  return promise;
+export interface RangeResult {
+  months: MonthPacking[];
+  pending: { month: string; company: string }[];
+  fetched: number;
 }
 
-/** All months of a range for every production company; two fetches in flight at a time. */
-export async function rangePacking(months: string[]): Promise<MonthPacking[]> {
+export async function rangePacking(
+  months: string[],
+  budget = FETCH_BUDGET,
+): Promise<RangeResult> {
   const session = await getSession();
   const companies = productionCompanies(session);
 
   const jobs = months.flatMap((month) => companies.map((company) => ({ month, company })));
-  const results: MonthPacking[] = [];
+  const cached = await readCacheMany(jobs.map((j) => cacheKey(j.month, j.company.id)));
 
-  // Odoo builds these reports slowly; two at a time is polite and halves the wait.
+  const have: MonthPacking[] = [];
+  const missing: typeof jobs = [];
+
+  for (const job of jobs) {
+    const entry = cached.get(cacheKey(job.month, job.company.id));
+    if (entry && isFresh(entry)) have.push(entry);
+    else missing.push(job);
+  }
+
+  // Newest first: the recent months are the ones people look at.
+  missing.sort((a, b) => b.month.localeCompare(a.month));
+
+  const toFetch = missing.slice(0, Math.max(budget, 0));
+  const pending = missing.slice(toFetch.length);
+
+  // Two at a time: Odoo builds these slowly and parallelism past this just
+  // trades one queue for another.
   const CONCURRENCY = 2;
   let next = 0;
   await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async () => {
-      while (next < jobs.length) {
-        const job = jobs[next++];
-        results.push(await monthPacking(job.month, job.company));
+    Array.from({ length: Math.min(CONCURRENCY, toFetch.length) }, async () => {
+      while (next < toFetch.length) {
+        const job = toFetch[next++];
+        have.push(await fetchMonth(job.month, job.company));
       }
     }),
   );
 
-  return results;
+  return {
+    months: have,
+    pending: pending.map((j) => ({ month: j.month, company: j.company.name })),
+    fetched: toFetch.length,
+  };
 }

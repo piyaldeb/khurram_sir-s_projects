@@ -1,0 +1,79 @@
+{
+	"version": 3,
+	"routes": [
+		{
+			"handle": "filesystem"
+		},
+		{
+			"src": "^/_astro/(.*)$",
+			"headers": {
+				"cache-control": "public, max-age=31536000, immutable"
+			},
+			"continue": true
+		},
+		{
+			"src": "^/_server-islands/([^/]+?)/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/_image/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/analytics/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/analytics/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/backfill/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/budget/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/day-report/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/download/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/lookup/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/production/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/report/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/summary/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/api/sync/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/budget/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/reports/?$",
+			"dest": "_render"
+		},
+		{
+			"src": "^/$",
+			"dest": "_render"
+		}
+	]
+}
