@@ -1309,33 +1309,6 @@ td.date-cell:hover .dow {
   padding: 4px 7px;
 }
 
-/* --------------------------------------------------- production day report */
-
-.production .period-picker input[type='date'] {
-  border: 0;
-  background: transparent;
-  padding: 7px 10px;
-  font-weight: 560;
-  cursor: pointer;
-}
-
-table.day-table td,
-table.day-table th {
-  padding: 6px 14px;
-  white-space: nowrap;
-}
-
-table.day-table tbody tr:hover td {
-  background: var(--accent-wash);
-}
-
-table.day-table tfoot td {
-  position: static;
-  font-weight: 650;
-  border-top: 2px solid var(--rule);
-  background: var(--surface-sunk);
-}
-
 /* --------------------------------------------------------------- ABC page */
 
 .abc-badge {
@@ -1385,4 +1358,374 @@ table.day-table tfoot td {
 /* The hit area sits under the row; highlighting it is enough of a cue. */
 .c-hit.on {
   fill: var(--accent-wash);
+}
+
+/* ------------------------------------------------- production day report */
+
+.day-layout {
+  display: grid;
+  grid-template-columns: 322px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/* Matches the .layout breakpoint: below this the rail stacks above the grid. */
+@media (max-width: 900px) {
+  .day-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.day-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 69px;
+}
+
+@media (max-width: 900px) {
+  .day-rail {
+    position: static;
+  }
+}
+
+.rail-block {
+  padding: 14px 16px 16px;
+}
+
+.rail-block h2 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.rail-figure {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.rail-sub {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.rail-verdict {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.rail-note {
+  margin: 10px 0 0;
+  padding-top: 9px;
+  border-top: 1px solid var(--grid);
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.rail-block .good {
+  color: var(--good);
+  font-weight: 600;
+}
+
+.rail-block .warn {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+/* Company split and the stuck list share one bar treatment. */
+.meter {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-sunk);
+  overflow: hidden;
+  margin-top: 5px;
+}
+
+.meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.meter-fill.accent { background: var(--accent); }
+.meter-fill.serious { background: var(--serious); }
+.meter-fill.s1 { background: var(--series-1); }
+.meter-fill.s2 { background: var(--series-2); }
+
+.rail-split {
+  margin-top: 12px;
+}
+
+.rail-split-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.rail-split-head b {
+  font-variant-numeric: tabular-nums;
+}
+
+.swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+}
+
+.swatch.s1 { background: var(--series-1); }
+.swatch.s2 { background: var(--series-2); }
+
+.rail-pairs {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+
+.rail-pairs dt {
+  color: var(--ink-2);
+}
+
+.rail-pairs dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.rail-pairs dd.good { color: var(--good); }
+.rail-pairs dd.warn { color: var(--warning); }
+
+.stuck {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stuck li + li {
+  margin-top: 11px;
+}
+
+.stuck-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.stuck-head b {
+  font-variant-numeric: tabular-nums;
+}
+
+.stuck-name {
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- the grid ----------------------------------------------------------- */
+
+.chips-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.chips-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+/* A group that is on reads as selected; one that is off invites adding it. */
+.chip.toggle[aria-pressed='true'] {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 550;
+}
+
+.chips-search {
+  margin-left: auto;
+  padding: 5px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 12px;
+  min-width: 170px;
+}
+
+.day-card {
+  overflow: hidden;
+}
+
+table.day-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+table.day-grid th,
+table.day-grid td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--grid);
+  white-space: nowrap;
+}
+
+table.day-grid .group-head {
+  padding: 8px 8px 5px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border-left: 1px solid var(--grid);
+  background: var(--surface);
+}
+
+table.day-grid .sub-row th {
+  text-align: right;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+table.day-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+table.day-grid .sub-row th:first-of-type,
+table.day-grid td:first-child {
+  text-align: left;
+}
+
+/* The product name stays put when the grid scrolls sideways. */
+table.day-grid .sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  text-align: left;
+  font-weight: 550;
+  min-width: 168px;
+}
+
+table.day-grid thead .sticky-col {
+  z-index: 4;
+}
+
+table.day-grid td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  border-left: 1px solid var(--grid);
+}
+
+table.day-grid th.tinted,
+table.day-grid td.tinted {
+  background: var(--accent-wash);
+}
+
+table.day-grid tbody tr:hover td {
+  background: var(--surface-sunk);
+}
+
+table.day-grid tbody tr:hover .sticky-col {
+  background: var(--surface-sunk);
+}
+
+.company-row td {
+  padding: 7px 12px;
+  background: var(--plane);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.company-row .rail-sub {
+  display: inline;
+  margin-left: 8px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 450;
+}
+
+.total-row td {
+  font-weight: 650;
+  color: var(--ink);
+  background: var(--surface-sunk);
+  border-top: 1px solid var(--rule);
+}
+
+.total-row .rail-sub {
+  display: inline;
+  margin-left: 6px;
+  font-weight: 450;
+}
+
+.grand-row td {
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface-sunk);
+  border-top: 2px solid var(--rule);
+}
+
+.grand-row .rail-sub {
+  display: inline;
+  margin-left: 6px;
+  font-weight: 450;
+}
+
+/* Quantities in PCS and GRS do not add up, so the cell says so. */
+table.day-grid td.units {
+  color: var(--ink-muted);
+  font-weight: 450;
+  font-size: 11px;
+}
+
+/* Still used by the ABC tables. */
+table.day-table td,
+table.day-table th {
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+
+table.day-table tbody tr:hover td {
+  background: var(--accent-wash);
+}
+
+table.day-table tfoot td {
+  position: static;
+  font-weight: 650;
+  border-top: 2px solid var(--rule);
+  background: var(--surface-sunk);
 }

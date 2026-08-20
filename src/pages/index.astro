@@ -29,9 +29,8 @@ const connectionLabel = session
         <p class="eyebrow">Manufacturing</p>
         <h1>Production report</h1>
         <p class="lede">
-          The daily MRP Invoice report, read live from Odoo for each company — packing,
-          pending, released, and open order acknowledgements. Opens on yesterday, because
-          today's shift is still running.
+          The daily MRP Invoice sheet, read live from Odoo for each company. Opens on
+          yesterday, because today's shift is still running.
         </p>
       </div>
 
@@ -55,9 +54,18 @@ const connectionLabel = session
       )
     }
 
-    <div class="kpis" id="day-kpis"></div>
+    <div class="day-layout">
+      <!-- The four things this page is opened to find out. -->
+      <aside class="day-rail" id="day-rail"></aside>
 
-    <div id="day-companies"></div>
+      <section class="day-main">
+        <div class="chips-bar panel" id="group-chips" role="group" aria-label="Column groups"></div>
+        <div class="panel card day-card">
+          <div class="table-scroll" id="day-grid" style="max-height:none"></div>
+        </div>
+        <p class="hint" id="day-note"></p>
+      </section>
+    </div>
   </main>
 
   <script src="../scripts/production.ts"></script>
