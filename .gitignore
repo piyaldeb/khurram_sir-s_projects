@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .astro/
+.vercel/
 
 # Secrets - never commit. Credentials live only in .env.
 .env
