@@ -1,0 +1,67 @@
+---
+import '../styles/app.css';
+
+interface Props {
+  title: string;
+  connected?: boolean;
+  connectionLabel?: string;
+}
+
+const { title, connected = false, connectionLabel = 'Not connected' } = Astro.props;
+const path = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content="Manufacturing reports read live from Odoo over JSON-RPC." />
+    <script is:inline>
+      // Restore the theme before first paint so the toggle never flashes.
+      const stored = localStorage.getItem('mrp-theme');
+      if (stored) document.documentElement.dataset.theme = stored;
+    </script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span>Manufacturing Reports</span>
+          <small>Odoo · JSON-RPC</small>
+        </div>
+        <nav class="nav" aria-label="Sections">
+          <a href="/" class:list={['nav-link', { active: path === '/' }]}>Production report</a>
+          <a href="/budget" class:list={['nav-link', { active: path.startsWith('/budget') }]}>
+            Budget follow-up
+          </a>
+          <a href="/analytics" class:list={['nav-link', { active: path.startsWith('/analytics') }]}>
+            Production ABC
+          </a>
+        </nav>
+        <div class="topbar-spacer"></div>
+        <div class="conn">
+          <span class={connected ? 'dot' : 'dot off'}></span>
+          <span>{connectionLabel}</span>
+        </div>
+        <button class="btn" id="theme-toggle" type="button" aria-label="Toggle colour theme">
+          Theme
+        </button>
+      </header>
+      <slot />
+    </div>
+
+    <script is:inline>
+      document.getElementById('theme-toggle')?.addEventListener('click', () => {
+        const root = document.documentElement;
+        const isDark =
+          root.dataset.theme === 'dark' ||
+          (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+        const next = isDark ? 'light' : 'dark';
+        root.dataset.theme = next;
+        localStorage.setItem('mrp-theme', next);
+      });
+    </script>
+  </body>
+</html>

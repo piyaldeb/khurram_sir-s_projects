@@ -1,0 +1,25 @@
+{
+  "name": "taps-mrp-reports",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "start": "node --env-file=.env ./dist/server/entry.mjs",
+    "preview": "node --env-file=.env ./dist/server/entry.mjs",
+    "check": "astro check",
+    "check:odoo": "node scripts/check-odoo.mjs",
+    "db:setup": "node scripts/db-setup.mjs",
+    "db:create": "node scripts/db-create.mjs"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@astrojs/node": "^9.2.2",
+    "astro": "^5.13.2",
+    "exceljs": "^4.4.0",
+    "postgres": "^3.4.9",
+    "typescript": "^5.9.3",
+    "jszip": "^3.10.1"
+  }
+}
