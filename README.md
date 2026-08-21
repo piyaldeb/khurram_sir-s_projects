@@ -52,13 +52,29 @@ The app runs as serverless functions on Vercel, which changes two things:
 - **A hard request timeout.** A cold fiscal year needs ~24 Odoo report builds,
   far more than one request allows, so `/api/analytics` fills a few months per
   call (`ANALYTICS_FETCH_PER_REQUEST`, default 4) and the page polls until
-  nothing is pending, showing partial figures meanwhile.
+  nothing is pending, showing partial figures meanwhile. `/api/ot-cost` does the
+  same with `OT_FETCH_PER_REQUEST` (default 6).
 
 The adapter switches automatically: `@astrojs/vercel` when `VERCEL` or
 `DEPLOY_TARGET=vercel` is set, `@astrojs/node` otherwise. Build locally with
 `DEPLOY_TARGET=vercel npm run build` to check the serverless bundle.
 
-### Steps
+### Deploys are git-triggered
+
+The Vercel project is connected to this GitHub repository, so **pushing to `main`
+deploys production**. Nothing else to run:
+
+```bash
+git push origin main     # -> builds and promotes to
+                         #    https://khurram-sir-s-reports.vercel.app
+```
+
+Any other branch, or a pull request, gets its own preview URL on the same
+environment variables. `vercel --prod` still works if you ever need to deploy a
+working tree that is not committed, and `vercel git connect` re-establishes the
+link if it is ever lost.
+
+### First-time setup
 
 1. **Import the repo** at [vercel.com/new](https://vercel.com/new) — framework
    detects as Astro, no build settings to change.
