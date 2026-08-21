@@ -1,12 +1,14 @@
 # TAPS Manufacturing Reports
 
 An Astro site that reads manufacturing reporting straight out of Odoo over JSON-RPC —
-no export/import step, no copies of the data. Two sections:
+no export/import step, no copies of the data:
 
 | Section | What it does |
 |---|---|
 | **Reports** (`/`) | Runs any of the 36 `MRP Reports` wizard reports and renders the result as a searchable, sortable table with totals and CSV/Excel export. |
 | **Budget follow-up** (`/budget`) | `Monthly Budget vs Achievement`, live — as a month sheet, a fiscal year, or year-to-date, with charts. Targets come from the planning workbook; production is read from Odoo. |
+| **Production ABC** (`/analytics`) | Pareto analysis over the packing reports: which items, buyers and customers carry the value. |
+| **OT cost** (`/ot-cost`) | The `OT Cost` sheet, live — an OT month, a fiscal year, or year-to-date, split Manufacturing against Other Departments and measured against the OT plan and budget. |
 
 ## Setup
 
@@ -83,9 +85,19 @@ The adapter switches automatically: `@astrojs/vercel` when `VERCEL` or
 ### Anything public?
 
 Nothing in the repo carries a credential — `.env`, `*.har`, `*.xlsx` and `data/`
-are all ignored. `src/data/plan-calendar.json` **is** committed, because the app
-imports it, and it contains the monthly production targets. If the repository is
-public, so are those.
+are all ignored.
+
+Three files under `src/data/` **are** committed, because the app imports them, and each
+holds internal planning figures:
+
+| File | What is in it |
+|---|---|
+| `plan-calendar.json` | monthly production targets and the working-day calendar |
+| `ot-budget.json` | the OT plan and OT budget per month, per business unit |
+| `ot-sections.json` | section and department names with their value-add tag |
+
+The repository is currently **public**, so those figures are public too. Nothing else
+about the business is: actuals are read from Odoo at request time and never committed.
 
 ## How the Odoo calls work
 
@@ -271,12 +283,162 @@ their surface); budget against achievement is one subject plus a reference, so b
 is neutral gray and only achievement carries the hue. Every chart has a legend, direct
 end labels, hover tooltips, and a table view beside it.
 
+## OT cost
+
+The `OT Cost` workbook, rebuilt against Odoo. Two controls in the header: three periods —
+an **OT month**, a **fiscal year**, that **year to date** — and a business unit: **whole
+plant**, **Zipper**, or **Metal Trims**.
+
+An OT month is not a calendar month — `2026-08` runs **26 Jul to 25 Aug**, the payroll
+cycle the sheets are cut on.
+
+The unit filter is applied server-side, before anything is derived, so a filtered view is
+a real report about that unit rather than a subtotal of the plant's: its Pareto, its
+spikes, its cost per OT hour. Zipper and Metal Trims add back to the whole plant exactly.
+Filtering also collapses the per-unit columns, so the tables never print a column of
+dashes for the unit that is not on screen.
+
+### Where the numbers come from
+
+The `attendance.pdf.report` wizard's `ot_analysis` report, run the same way the Odoo web
+client runs it (`web_save` → `action_generate_xlsx_report` → `GET /report/xlsx/...`). Its
+*SectionWise OT* sheet carries two rows per section — OT Hours and OT Cost — with one
+column per day.
+
+One plant is three reports, because that is how the source workbook fetches it:
+
+| Report | Filter | `allowed_company_ids` | Counts as |
+|---|---|---|---|
+| Zipper | company 1 | `[1]` | Zipper |
+| C-Zipper Worker | employee category 42 | `[4, 1]` | Zipper |
+| Metal Trims | company 3 | `[3]` | Metal Trims |
+
+The report's `Total` column is a formula Odoo leaves uncached, so it is ignored and the
+day columns are summed instead. Date headers come back year-less (`26 Jul Sun`), so the
+year is inferred from the requested window — which is what makes the January month,
+straddling two years, come out right.
+
+### The exchange rate
+
+Odoo reports overtime in taka. The workbook divides by a flat **120**, which drifts as
+the taka moves, so `src/lib/fxrate.ts` looks today's rate up instead and the page prints
+it under the title — *Today's rate: 1 USD = ৳122.21 · 21 Aug 2026*. The page shows the
+rate and its date; which service supplied it stays in the code.
+
+Two free sources, no API key between them:
+
+1. `open.er-api.com/v6/latest/USD`
+2. `cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json`
+
+If both are unreachable the **last good rate** is reused and the line says so; only if
+there has never been one does it fall back to `OT_USD_RATE` and say the figure is not a
+live quote. Rates are cached for `FX_FRESH_HOURS` (default 6).
+
+What is cached from Odoo stays in **taka**, and conversion happens on the way out — so a
+change of rate costs nothing and never triggers a refetch.
+
+Two consequences worth knowing, both stated in the page's own footnote:
+
+- Every month is converted at **today's** rate, so dollar figures for past months move
+  with the taka. The taka figures behind them do not.
+- Dollar figures therefore no longer match the workbook's flat-120 arithmetic. Set
+  `FX_LIVE=0` to pin the rate to `OT_USD_RATE` and reproduce the workbook exactly.
+
+### Manufacturing vs Other Departments
+
+Every section is tagged `M-VA`, `M-NVA` or `NM-NVA` on the monitoring sheets, and the
+roll-up then moves five sections out of Manufacturing regardless of their tag:
+
+```
+Manufacturing = M-VA + M-NVA − { ETP, FG Store, RM Store, MIS, Design & Marketing. }
+Other         = NM-NVA        + { ETP, FG Store, RM Store, MIS, Design & Marketing. }
+```
+
+That is exactly what rows 110/111 (Zipper) and 89/90 (Metal Trims) of each
+`<BU> <Month>_new` sheet do — stores, effluent treatment and MIS serve the plant rather
+than run it. `src/data/ot-sections.json` holds the 40 Zipper and 25 Metal Trims sections
+with their tag and department, extracted from those sheets. Every section Odoo has
+returned since April 2023 is in the map; anything genuinely new counts as manufacturing
+and is named in the page's footnote rather than passing silently.
+
+### Plan and budget
+
+`src/data/ot-budget.json` carries two targets per OT month, and they are different things:
+
+- **Plan** — the operational cap from the `OT Cost` workbook's own month sheets
+  ($20,000 a month through Jun-26, $18,000 + $2,000 from Jul-26). This is what the
+  sheet's *OT Consumed %* is measured against, so it is the page's headline too.
+- **Budget** — the annual model from `YTD 2025-26 OT BGT Vs Actaul`, which varies by
+  month and only covers Apr-26 → Mar-27.
+
+Months with no figure are left empty and named in the footnote — Jan-26 has no plan
+because the workbook has no January sheet.
+
+### Validation
+
+Rebuilt from Odoo and converted at the workbook's flat 120 (`FX_LIVE=0`), the Aug-26 OT
+month reproduces `OT Cost (1).xlsx`, sheet `26-Jul to 25-Aug-2026`, **to the cent**:
+
+| | Zipper | Metal Trims |
+|---|---|---|
+| Manufacturing | $17,754.99 | $2,517.87 |
+| Other departments | $1,349.19 | $131.40 |
+
+Total plant $21,753.45, Manufacturing 93.19% — and it matches day by day, not just on the
+total. Jul-26 ties out the same way: Manufacturing $16,541.11, Other $1,402.88, plant
+$17,943.99. At the live rate the same month reads $21,360.85, which is the same taka
+divided by ৳122.21 rather than ৳120.
+
+Earlier months do **not** match the workbook, and the reason is in the workbook rather
+than here:
+
+| OT month | Workbook Zipper mfg | Here | Why |
+|---|---|---|---|
+| Jul-26, Aug-26 | — | exact | The sheet pulls actual per-section OT Cost and applies the exclusions. |
+| Jun-26 | $16,930.23 | $16,869.53 | The `26-May to 25-Jun` sheet holds hard-coded values, not a live pull — a frozen snapshot, 0.4% adrift. |
+| Apr-26, May-26 | $21,226.34, $18,735.56 | $22,751.37, $23,249.99 | Those month sheets compute cost as **OT hours × one blended rate** (`=G49*G1`) and apply no exclusions at all. |
+
+So the workbook changed method mid-year. This page applies the current method — actual
+per-section cost, C-Zipper Worker included, the same Manufacturing / Other rule — to
+every month, which is what makes a fiscal year comparable end to end.
+
+### The reading
+
+The rail carries the judgment: consumption against plan, the Manufacturing / Other split,
+each business unit against its own plan, the run rate and what it projects to, the days
+that broke the pattern, and how few sections carry most of the bill.
+
+Percentages compare like with like. A fiscal year can hold months with no plan on record,
+and dividing a full year's spend by a seven-month plan reads as a 47% overrun that never
+happened — so the ratio uses spend over exactly the months that carry a target, the
+headline figure stays the real total, and a note says how many months that was.
+
+Spikes are days at or above **twice the median of the days that actually ran overtime** —
+a mean would be dragged up by the very days being looked for. Each one names the sections
+it came from. The projection carries today's spend per active day across the days left,
+scaled by how often a day has run overtime so far, rather than assuming every remaining
+calendar day is worked.
+
+### Cost and caching
+
+A report takes Odoo ~8s to build and a month is three of them, so a cold fiscal year is
+36 builds. Each job-month's parsed figures are cached — Supabase `app_cache` when it is
+configured, `data/otcost/` otherwise — and a closed OT month is fetched exactly once. The
+month in progress ages out on `ODOO_SYNC_FRESH_MINUTES`. Each request fills at most
+`OT_FETCH_PER_REQUEST` (default 6) and the page polls until nothing is pending, which is
+what keeps it inside a serverless timeout.
+
+Odoo answers with real OT data from **April 2023**; `OT_EARLIEST_MONTH` bounds what the
+page offers so it never spends a report build on a window Odoo cannot fill.
+
 ## Layout
 
 ```
 src/
   data/
     plan-calendar.json  targets + working calendars, extracted from the workbook
+    ot-sections.json    OT section -> M-VA / M-NVA / NM-NVA, extracted from the workbook
+    ot-budget.json      OT plan and budget per OT month
   lib/
     odoo.ts        session + JSON-RPC client (companies, context)
     reports.ts     wizard catalogue and the run-a-report flow
@@ -286,11 +448,15 @@ src/
     production.ts  daily Zipper / MT production, read from Odoo
     backfill.ts    fills and saves a run of months
     summary.ts     fiscal-year / year-to-date rollups
+    fxrate.ts      today's USD/BDT rate, looked up and cached
+    otcost.ts      OT analysis from Odoo: wizard, parse, per-month cache
+    otanalysis.ts  the OT Cost sheet's arithmetic and the reading that goes with it
     charts.ts      inline-SVG bar and line charts
     storage.ts     flat-file JSON storage
   pages/
     index.astro    report console
     budget.astro   budget follow-up
+    ot-cost.astro  OT cost
     api/report.ts     POST - run a report, return parsed JSON
     api/download.ts   GET  - stream the untouched xlsx
     api/lookup.ts     GET  - buyers, challans, work centres
@@ -298,6 +464,7 @@ src/
     api/production.ts GET  - one month's production from Odoo
     api/backfill.ts   POST - fetch and save a fiscal year / YTD
     api/summary.ts    GET  - fiscal-year and YTD rollups
+    api/ot-cost.ts    GET  - OT cost for a month, a fiscal year, or YTD
   scripts/         client-side logic for each page
   styles/app.css   design tokens (light + dark), components, charts
 ```

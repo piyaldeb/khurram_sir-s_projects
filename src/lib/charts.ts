@@ -178,30 +178,61 @@ export function lineChart(opts: ChartOptions): string {
   const x = (i: number) => PAD.left + step * i;
   const every = opts.labelEvery ?? Math.ceil(n / Math.max(Math.floor(plotW / 56), 1));
 
+  const lastOf = (s: Series) =>
+    s.values.reduce<number>((acc, v, i) => (v === null || v === undefined ? acc : i), -1);
+
   const paths = series
     .map((s) => {
       const pts = s.values
         .map((v, i) => (v === null || v === undefined ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`))
         .filter(Boolean);
       if (!pts.length) return '';
-      const last = s.values.reduce<number>(
-        (acc, v, i) => (v === null || v === undefined ? acc : i),
-        -1,
-      );
-      const endLabel =
-        last >= 0
-          ? `<text class="c-end" x="${(x(last) + 7).toFixed(1)}" y="${(y(s.values[last]!) + 4).toFixed(1)}">${esc(
-              s.name,
-            )}</text>`
-          : '';
+      const last = lastOf(s);
       return (
         `<polyline class="c-line${s.dashed ? ' dashed' : ''}" points="${pts.join(' ')}" stroke="var(${s.color})" />` +
         (last >= 0
           ? `<circle class="c-dot" cx="${x(last).toFixed(1)}" cy="${y(s.values[last]!).toFixed(1)}" r="4.5" fill="var(${s.color})" />`
-          : '') +
-        endLabel
+          : '')
       );
     })
+    .join('');
+
+  /**
+   * Direct labels sit at each line's last point, so series that finish close
+   * together would print on top of each other and read as one smear. Nudge them
+   * apart in the order they finish, then pull the stack back inside the plot if
+   * it has grown past the bottom.
+   */
+  const LABEL_GAP = 13;
+  const ends = series
+    .map((s) => {
+      const last = lastOf(s);
+      return last < 0 ? null : { s, x: x(last), at: y(s.values[last]!) };
+    })
+    .filter((e): e is { s: Series; x: number; at: number } => e !== null)
+    .sort((a, b) => a.at - b.at)
+    .map((e) => ({ ...e, labelY: e.at }));
+
+  for (let i = 1; i < ends.length; i++) {
+    const gap = ends[i].labelY - ends[i - 1].labelY;
+    if (gap < LABEL_GAP) ends[i].labelY = ends[i - 1].labelY + LABEL_GAP;
+  }
+  const spill = ends.length ? ends[ends.length - 1].labelY - (PAD.top + plotH) : 0;
+  if (spill > 0) for (const e of ends) e.labelY -= spill;
+
+  const endLabels = ends
+    .map(
+      (e) =>
+        // A leader only earns its ink once the label has actually been moved.
+        (Math.abs(e.labelY - e.at) > 1.5
+          ? `<line class="c-grid" x1="${(e.x + 4).toFixed(1)}" y1="${e.at.toFixed(1)}" x2="${(
+              e.x + 7
+            ).toFixed(1)}" y2="${e.labelY.toFixed(1)}" />`
+          : '') +
+        `<text class="c-end" x="${(e.x + 9).toFixed(1)}" y="${(e.labelY + 4).toFixed(1)}">${esc(
+          e.s.name,
+        )}</text>`,
+    )
     .join('');
 
   const hits = categories
@@ -231,6 +262,7 @@ export function lineChart(opts: ChartOptions): string {
     <line class="c-axis" x1="${PAD.left}" y1="${(PAD.top + plotH).toFixed(1)}" x2="${(PAD.left + plotW).toFixed(1)}" y2="${(PAD.top + plotH).toFixed(1)}" />
     <line class="c-cross" x1="0" y1="${PAD.top}" x2="0" y2="${(PAD.top + plotH).toFixed(1)}" style="opacity:0" />
     ${paths}
+    ${endLabels}
     ${cats}
     ${hits}
   </svg>`;

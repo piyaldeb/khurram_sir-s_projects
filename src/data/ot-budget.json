@@ -1,0 +1,143 @@
+{
+  "_source": {
+    "plan": "OT Cost (1).xlsx - the 'Zipper OT Plan' / 'MT OT Plan' cells on each month sheet. The operational cap the sheet's 'OT Consumed %' is measured against.",
+    "budget": "Daily OT monitoring_New (2).xlsx, sheet 'YTD 2025-26 OT BGT Vs Actaul' rows 4-5. The annual OT budget model; columns are OT-period end dates."
+  },
+  "_note": "Keys are OT months. OT month YYYY-MM runs from the 26th of the previous calendar month to the 25th of YYYY-MM. Figures are USD.",
+  "months": {
+    "2025-08": {
+      "plan": {
+        "zipper": 20000.0,
+        "mt": 2000.0
+      }
+    },
+    "2025-09": {
+      "plan": {
+        "zipper": 20000.0,
+        "mt": 2000.0
+      }
+    },
+    "2025-10": {
+      "plan": {
+        "zipper": 20000.0,
+        "mt": 2000.0
+      }
+    },
+    "2025-11": {
+      "plan": {
+        "zipper": 20000.0,
+        "mt": 2000.0
+      }
+    },
+    "2025-12": {
+      "plan": {
+        "zipper": 20000.0,
+        "mt": 2000.0
+      }
+    },
+    "2026-02": {
+      "plan": {
+        "zipper": 20000.0,
+        "mt": 2000.0
+      }
+    },
+    "2026-03": {
+      "plan": {
+        "zipper": 20000.0,
+        "mt": 2000.0
+      }
+    },
+    "2026-04": {
+      "plan": {
+        "zipper": 20000.0,
+        "mt": 2000.0
+      },
+      "budget": {
+        "zipper": 15558.92,
+        "mt": 3883.32
+      }
+    },
+    "2026-05": {
+      "plan": {
+        "zipper": 20000.0,
+        "mt": 2000.0
+      },
+      "budget": {
+        "zipper": 15558.28,
+        "mt": 3883.95
+      }
+    },
+    "2026-06": {
+      "plan": {
+        "zipper": 20000.0,
+        "mt": 2000.0
+      },
+      "budget": {
+        "zipper": 18587.36,
+        "mt": 4669.46
+      }
+    },
+    "2026-07": {
+      "plan": {
+        "zipper": 18000.0,
+        "mt": 2000.0
+      },
+      "budget": {
+        "zipper": 18651.62,
+        "mt": 4643.53
+      }
+    },
+    "2026-08": {
+      "plan": {
+        "zipper": 18000.0,
+        "mt": 2000.0
+      },
+      "budget": {
+        "zipper": 20485.31,
+        "mt": 5092.13
+      }
+    },
+    "2026-09": {
+      "budget": {
+        "zipper": 21469.43,
+        "mt": 5283.11
+      }
+    },
+    "2026-10": {
+      "budget": {
+        "zipper": 21519.2,
+        "mt": 5308.49
+      }
+    },
+    "2026-11": {
+      "budget": {
+        "zipper": 21590.99,
+        "mt": 5292.83
+      }
+    },
+    "2026-12": {
+      "budget": {
+        "zipper": 20415.87,
+        "mt": 5028.05
+      }
+    },
+    "2027-01": {
+      "budget": {
+        "zipper": 20469.39,
+        "mt": 5030.07
+      }
+    },
+    "2027-02": {
+      "budget": {
+        "zipper": 20226.42,
+        "mt": 5029.03
+      }
+    },
+    "2027-03": {
+      "budget": {
+        "zipper": 17203.6,
+        "mt": 4207.75
+      }
+    }
+  }
+}

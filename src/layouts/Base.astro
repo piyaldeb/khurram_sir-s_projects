@@ -39,6 +39,9 @@ const path = Astro.url.pathname;
           <a href="/analytics" class:list={['nav-link', { active: path.startsWith('/analytics') }]}>
             Production ABC
           </a>
+          <a href="/ot-cost" class:list={['nav-link', { active: path.startsWith('/ot-cost') }]}>
+            OT cost
+          </a>
         </nav>
         <div class="topbar-spacer"></div>
         <div class="conn" title={connectionLabel}>

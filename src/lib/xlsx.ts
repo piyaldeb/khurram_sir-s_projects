@@ -152,7 +152,13 @@ async function dropOverlappingMerges(buffer: ArrayBuffer): Promise<ArrayBuffer> 
   return zip.generateAsync({ type: 'arraybuffer' }) as Promise<ArrayBuffer>;
 }
 
-async function loadWorkbook(buffer: ArrayBuffer): Promise<ExcelJS.Workbook> {
+/**
+ * ExcelJS over Odoo's bytes, repairing the overlapping merges it refuses.
+ *
+ * Exported because not every caller wants the full grid — the OT report only
+ * needs two rows per section off one sheet, but it hits the same bad merges.
+ */
+export async function loadWorkbook(buffer: ArrayBuffer): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(buffer as any);

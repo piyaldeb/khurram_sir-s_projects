@@ -1,0 +1,147 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+import {
+  availableFiscalYears,
+  availableOtMonths,
+  fyLabel,
+  fyOfMonth,
+  monthLabel,
+  otMonthOf,
+  todayIso,
+} from '../lib/otcost';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const months = availableOtMonths();
+const month = otMonthOf(todayIso());
+const fiscalYears = availableFiscalYears();
+const currentFy = fyOfMonth(month);
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+---
+
+<Base title={`OT Cost · ${monthLabel(month)}`} connected={!!session} connectionLabel={connectionLabel}>
+  <main
+    class="main otcost"
+    data-month={month}
+    data-fy={String(currentFy)}
+    data-odoo={session ? '1' : ''}
+  >
+    <header class="page-head">
+      <div class="page-head-text">
+        <p class="eyebrow">Manufacturing</p>
+        <h1>OT Cost</h1>
+        <p class="lede">
+          Overtime read live from Odoo's attendance analysis, split Manufacturing against Other
+          Departments the way the OT Cost sheet does. An OT month runs from the 26th to the 25th.
+        </p>
+        <p class="hint" id="rate-line" aria-live="polite">Looking up today's exchange rate…</p>
+      </div>
+
+      <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Business unit" id="company-seg">
+          <button class="seg" type="button" role="tab" data-company="all" aria-selected="true">
+            Whole plant
+          </button>
+          <button class="seg" type="button" role="tab" data-company="zipper" aria-selected="false">
+            Zipper
+          </button>
+          <button class="seg" type="button" role="tab" data-company="mt" aria-selected="false">
+            Metal Trims
+          </button>
+        </div>
+
+        <div class="segmented" role="tablist" aria-label="Period">
+          <button class="seg" type="button" role="tab" data-view="month" aria-selected="true">
+            Month
+          </button>
+          <button class="seg" type="button" role="tab" data-view="fy" aria-selected="false">
+            Fiscal year
+          </button>
+          <button class="seg" type="button" role="tab" data-view="ytd" aria-selected="false">
+            Year to date
+          </button>
+        </div>
+
+        <div class="period-picker" id="picker-month">
+          <button class="step" type="button" id="month-prev" aria-label="Previous OT month">‹</button>
+          <select id="month-select" aria-label="OT month">
+            {months.map((m) => (
+              <option value={m} selected={m === month}>{monthLabel(m)}</option>
+            ))}
+          </select>
+          <button class="step" type="button" id="month-next" aria-label="Next OT month">›</button>
+        </div>
+
+        <div class="period-picker" id="picker-fy" hidden>
+          <select id="fy-select" aria-label="Fiscal year">
+            {fiscalYears.map((fy) => (
+              <option value={String(fy)} selected={fy === currentFy}>{fyLabel(fy)}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </header>
+
+    {
+      odooError && (
+        <div class="panel state error banner">
+          <h2>Odoo is not connected</h2>
+          <p>{odooError}</p>
+        </div>
+      )
+    }
+
+    <div class="panel state" id="ot-status" hidden>
+      <h2><span class="spinner"></span> Reading overtime from Odoo</h2>
+      <p>
+        Each OT month is three attendance reports Odoo builds on demand, so a cold fiscal year
+        takes a couple of minutes. After that only the month in progress refreshes.
+      </p>
+    </div>
+
+    <div class="day-layout" id="ot-body" hidden>
+      <!-- The rail carries the reading; the grid carries every figure. -->
+      <aside class="day-rail" id="ot-rail"></aside>
+
+      <section class="day-main">
+        <section class="panel card">
+          <div class="card-head">
+            <h2 id="chart-a-title">OT against plan</h2>
+            <span class="hint" id="chart-a-note"></span>
+          </div>
+          <div class="chart-host" id="chart-spend"></div>
+        </section>
+
+        <section class="panel card" style="margin-top:16px">
+          <div class="card-head">
+            <h2>Cumulative OT against plan</h2>
+            <span class="hint" id="chart-b-note"></span>
+          </div>
+          <div class="chart-host" id="chart-cumulative"></div>
+        </section>
+
+        <div class="chips-bar panel" id="ot-chips" style="margin-top:16px"></div>
+
+        <div class="panel card day-card">
+          <div class="table-scroll" id="ot-grid" style="max-height:none"></div>
+        </div>
+        <p class="hint" id="ot-note"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="../scripts/otcost.ts"></script>
+</Base>

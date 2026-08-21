@@ -1,0 +1,277 @@
+{
+  "_source": "Daily OT monitoring_New (2).xlsx - the Department/Section tables on every '<BU> <Month>_new' sheet. Column A carries the tag.",
+  "_note": "reclassified sections are tagged M-NVA on the sheets but the OT Cost roll-up moves them out of Manufacturing; see the SUMIFS on rows 110/111 (Zipper) and 89/90 (MT).",
+  "reclassifiedToOther": [
+    "ETP",
+    "FG Store",
+    "RM Store",
+    "MIS",
+    "Design & Marketing."
+  ],
+  "sections": {
+    "zipper": {
+      "ASS": {
+        "tag": "M-NVA",
+        "department": "Quality Assurance"
+      },
+      "Admin": {
+        "tag": "NM-NVA",
+        "department": "Human Resource"
+      },
+      "Assembly (Packing)": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Assembly (Pre-Checking)": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Assembly (Pre-Checking) - Coil Zip": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Assembly-Maintenance": {
+        "tag": "M-NVA",
+        "department": "Maintenance"
+      },
+      "Chain Making": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Coil Assembly": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Customer Support.": {
+        "tag": "NM-NVA",
+        "department": "Customer Support."
+      },
+      "Die Casting": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Dyeing": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Dyeing Sample": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Dyeing-Maintenance": {
+        "tag": "M-NVA",
+        "department": "Maintenance"
+      },
+      "ETP": {
+        "tag": "M-NVA",
+        "department": "ETP"
+      },
+      "Electro Plating (Button)": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Electro Plating (Zipper)": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "FG Store": {
+        "tag": "M-NVA",
+        "department": "Store"
+      },
+      "Finishing": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "HR, Admin & Compliance": {
+        "tag": "NM-NVA",
+        "department": "Human Resource"
+      },
+      "Housekeeping": {
+        "tag": "NM-NVA",
+        "department": "Human Resource"
+      },
+      "MIS": {
+        "tag": "M-NVA",
+        "department": "Manufacturing"
+      },
+      "Maintenance": {
+        "tag": "M-NVA",
+        "department": "Maintenance"
+      },
+      "Metal Assembly": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Metal Chain": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "PPC": {
+        "tag": "M-NVA",
+        "department": "Manufacturing"
+      },
+      "Painting": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Plastic Zipper": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Plating Pre-Checking": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Plating Sampling": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Process Improvement": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Procurement": {
+        "tag": "NM-NVA",
+        "department": "Supply Chain"
+      },
+      "Product Development": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Production.": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Quality Assurance.": {
+        "tag": "M-NVA",
+        "department": "Quality Assurance"
+      },
+      "Quality Audit": {
+        "tag": "M-NVA",
+        "department": "Quality Assurance"
+      },
+      "RM Store": {
+        "tag": "M-NVA",
+        "department": "Store"
+      },
+      "Sample": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Slider Assembly": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Tool Room": {
+        "tag": "M-NVA",
+        "department": "Design & Engineering"
+      },
+      "Transport": {
+        "tag": "NM-NVA",
+        "department": "Human Resource"
+      }
+    },
+    "mt": {
+      "ASS": {
+        "tag": "M-NVA",
+        "department": "Quality Assurance"
+      },
+      "Admin": {
+        "tag": "NM-NVA",
+        "department": "Human Resource"
+      },
+      "Assembly": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Assembly (Pre-Checking)": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Brass Sheet Cutting": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Design & Marketing.": {
+        "tag": "M-NVA",
+        "department": "Design & Marketing"
+      },
+      "Die Casting": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "ETP": {
+        "tag": "M-NVA",
+        "department": "ETP"
+      },
+      "Electro Plating (Button)": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "FG Store": {
+        "tag": "M-NVA",
+        "department": "Store"
+      },
+      "Finance": {
+        "tag": "NM-NVA",
+        "department": "Finance & Accounts"
+      },
+      "HR, Admin & Compliance": {
+        "tag": "NM-NVA",
+        "department": "Human Resource"
+      },
+      "Maintenance": {
+        "tag": "M-NVA",
+        "department": "Maintenance"
+      },
+      "PPC": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Packing": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Painting": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Plating Pre-Checking": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Plating Sampling": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Press (Cap Part)": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Press (Under Part)": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Production..": {
+        "tag": "M-VA",
+        "department": "Production"
+      },
+      "Quality Assurance.": {
+        "tag": "M-NVA",
+        "department": "Quality Assurance"
+      },
+      "RM Store": {
+        "tag": "M-NVA",
+        "department": "Store"
+      },
+      "Sample": {
+        "tag": "M-NVA",
+        "department": "Production"
+      },
+      "Tool Room": {
+        "tag": "M-NVA",
+        "department": "Design & Engineering"
+      }
+    }
+  }
+}

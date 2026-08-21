@@ -1626,6 +1626,17 @@ table.day-grid td:first-child {
   text-align: left;
 }
 
+/* Left-aligned text columns that are not the sticky key. */
+table.day-grid th.text,
+table.day-grid td.text {
+  text-align: left;
+}
+
+/* A grid whose key column is a number, not a name, does not need the width. */
+table.day-grid.key-narrow .sticky-col {
+  min-width: 46px;
+}
+
 /* The product name stays put when the grid scrolls sideways. */
 table.day-grid .sticky-col {
   position: sticky;
