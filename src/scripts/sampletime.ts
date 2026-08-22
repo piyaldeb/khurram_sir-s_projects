@@ -242,7 +242,14 @@ if (root?.dataset.odoo) {
     renderDistribution(r);
     fillMonths(r);
     renderMonths(r);
-    renderRanked('company-grid', r.totals.byCompany, 'Unit');
+    renderRanked('company-grid', r.totals.byCompany, 'Unit', (name) => {
+      // The unit is its own filter, so clicking one drives the control that
+      // owns it rather than typing the name into the search box.
+      const key = name === 'Zipper' ? 'zipper' : 'mt';
+      $(`co-seg`)
+        ?.querySelector<HTMLElement>(`[data-co="${state.company === key ? 'all' : key}"]`)
+        ?.click();
+    });
     renderRanked('buyer-grid', r.totals.topBuyers, 'Buyer');
     renderRanked('customer-grid', r.totals.topCustomers, 'Customer');
     renderRows(r);
@@ -452,8 +459,20 @@ if (root?.dataset.odoo) {
     sel.value = state.month;
   }
 
-  /** Buyers or customers, ranked by volume, with what that volume costs in days. */
-  function renderRanked(id: string, rows: Ranked[], heading: string) {
+  /**
+   * Buyers, customers or units, ranked by volume, with what it costs in days.
+   *
+   * A row is a way into the table below, but not always the same way: a buyer
+   * or customer is a text search, while a business unit is its own filter and
+   * has to switch that instead. Searching for "Zipper" finds the customers with
+   * "zipper" in their name, which is not what clicking the unit means.
+   */
+  function renderRanked(
+    id: string,
+    rows: Ranked[],
+    heading: string,
+    onPick?: (name: string) => void,
+  ) {
     const host = $(id);
     if (!host) return;
     if (!rows.length) {
@@ -485,10 +504,14 @@ if (root?.dataset.odoo) {
         .join('')}</tbody>
     </table>`;
 
-    // Clicking a name searches for it — the ranking is a way in, not a dead end.
+    // Clicking a name narrows the table — the ranking is a way in, not a dead end.
     host.querySelectorAll<HTMLElement>('.rank-row').forEach((row) => {
       row.addEventListener('click', () => {
         const name = row.dataset.name ?? '';
+        if (onPick) {
+          onPick(name);
+          return;
+        }
         state.q = name;
         state.offset = 0;
         const box = $<HTMLInputElement>('lt-search');
@@ -578,7 +601,10 @@ if (root?.dataset.odoo) {
 
     host.innerHTML = `<table class="grid lt-grid">
       <thead><tr>${head}</tr></thead>
-      <tbody>${body || `<tr><td colspan="${cols.length}" class="empty">Nothing matches.</td></tr>`}</tbody>
+      <tbody>${
+        body ||
+        `<tr><td colspan="${cols.length}" class="empty">${emptyReason(r)}</td></tr>`
+      }</tbody>
     </table>`;
 
     host.querySelectorAll<HTMLElement>('th[data-sort]').forEach((th) => {
@@ -623,6 +649,40 @@ if (root?.dataset.odoo) {
         Math.ceil(r.matched / r.limit),
         1,
       )}`;
+    }
+  }
+
+  /**
+   * Why the table is empty, in the terms the reader just used.
+   *
+   * A filter that legitimately matches nothing looks identical to one that is
+   * broken, so the empty state names the filter that emptied it — and, for the
+   * negative one, says where the negatives actually are.
+   */
+  function emptyReason(r: Result): string {
+    const noun = r.dataset === 'bulk' ? 'bulk orders' : 'samples';
+    const unit =
+      r.company === 'all' ? '' : r.company === 'zipper' ? ' for Zipper' : ' for Metal Trims';
+    const when = r.month ? ` in ${esc(monthLabel(r.month))}` : '';
+    const scope = `${esc(r.label)}${unit}${when}`;
+
+    if (state.q.trim()) {
+      return `No ${noun} in ${scope} match “${esc(state.q.trim())}”.`;
+    }
+    switch (state.only) {
+      case 'negative':
+        return (
+          `No ${noun} in ${scope} finished before their own date — which is the good outcome. ` +
+          `Negative lead times are the ones caused by a revision moving the date afterwards.`
+        );
+      case 'late':
+        return `No ${noun} in ${scope} took longer than 7 days.`;
+      case 'revised':
+        return `No ${noun} in ${scope} carry a revision in the sales module.`;
+      case 'pending':
+        return `Every ${noun.replace(/s$/, '')} in ${scope} has a completion date.`;
+      default:
+        return `No ${noun} in ${scope}.`;
     }
   }
 
