@@ -180,6 +180,18 @@ if (root?.dataset.odoo) {
     // leaving the page looking hung behind a skeleton.
     const cold = fresh && !state.result;
     if (cold) {
+      const title = $('lt-status-title');
+      if (title) {
+        const unit =
+          state.company === 'all'
+            ? 'both units'
+            : state.company === 'zipper'
+              ? 'Zipper'
+              : 'Metal Trims';
+        title.textContent = `Building ${state.dataset === 'bulk' ? 'bulk' : 'sample'} lead time · ${unit} · FY ${String(
+          state.fy,
+        ).slice(2)}-${String(state.fy + 1).slice(2)}`;
+      }
       $('lt-status')!.hidden = false;
       $('lt-body')!.hidden = true;
     } else if (fresh) {
@@ -203,8 +215,18 @@ if (root?.dataset.odoo) {
       $('lt-status')!.hidden = true;
       $('lt-body')!.hidden = false;
       const banner = $('error-banner')!;
-      banner.textContent = `Could not read the sample report — ${(err as Error).message}`;
+      banner.textContent = `Could not read the ${state.dataset} report — ${(err as Error).message}`;
       banner.hidden = false;
+      // The table still holds the previous selection's rows, which would read
+      // as the answer to the one that just failed. Clear it rather than lie.
+      if (!state.result) {
+        for (const id of ['lt-grid', 'month-grid', 'company-grid', 'buyer-grid', 'customer-grid']) {
+          const host = $(id);
+          if (host) host.innerHTML = '';
+        }
+        $('kpis')!.innerHTML = '';
+        $('lt-pager')!.hidden = true;
+      }
     }
   }
 
@@ -235,6 +257,7 @@ if (root?.dataset.odoo) {
   function render() {
     const r = state.result;
     if (!r) return;
+    syncControls(r);
     renderAsOf(r);
     renderQuality(r);
     renderKpis(r);
@@ -254,6 +277,32 @@ if (root?.dataset.odoo) {
     renderRanked('customer-grid', r.totals.topCustomers, 'Customer');
     renderRows(r);
     document.querySelectorAll<HTMLElement>('.chart-host').forEach(bindChartTooltips);
+  }
+
+  /**
+   * Points every control at what actually came back.
+   *
+   * Driving the segmented controls from the click alone lets them drift from
+   * the table: a restored page, a raced switch or a failed build leaves "Bulk"
+   * lit above a table full of samples. The response echoes the dataset, unit
+   * and year it answered for, so that — not the click — is what the buttons
+   * are set from.
+   */
+  function syncControls(r: Result) {
+    const pick = (group: string, attr: string, value: string) =>
+      document.querySelectorAll<HTMLElement>(`#${group} .seg`).forEach((seg) =>
+        seg.setAttribute('aria-selected', String(seg.dataset[attr] === value)),
+      );
+
+    pick('ds-seg', 'ds', r.dataset);
+    pick('co-seg', 'co', r.company);
+    pick('fy-seg', 'fy', String(r.fy));
+
+    // Local state follows too, so the next request cannot repeat the drift.
+    state.dataset = r.dataset;
+    state.company = r.company;
+    state.fy = r.fy;
+    state.month = r.month;
   }
 
   function renderAsOf(r: Result) {

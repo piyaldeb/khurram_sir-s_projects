@@ -22,7 +22,7 @@ const connectionLabel = session
   : 'Not connected';
 ---
 
-<Base title="Sample Lead Time" connected={!!session} connectionLabel={connectionLabel}>
+<Base title="Lead Time" connected={!!session} connectionLabel={connectionLabel}>
   <main class="main leadtime" data-fy={String(currentFy)} data-odoo={session ? '1' : ''}>
     <header class="page-head">
       <div class="page-head-text">
@@ -93,10 +93,11 @@ const connectionLabel = session
     }
 
     <div class="panel state" id="lt-status" hidden>
-      <h2><span class="spinner"></span> Building the fiscal year</h2>
+      <h2><span class="spinner"></span> <span id="lt-status-title">Building the fiscal year</span></h2>
       <p>
-        Odoo generates the sample BTM report on demand and a full year is around twenty thousand
-        samples, so the first read takes roughly half a minute. It is held after that.
+        Odoo builds these reports on demand, one per business unit, and a full year runs to tens of
+        thousands of rows — so the first read of a combination takes roughly half a minute. It is
+        held after that.
       </p>
     </div>
 
