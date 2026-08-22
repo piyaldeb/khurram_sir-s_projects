@@ -1,0 +1,196 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+import { availableFys, fyLabel, fyOf, todayIso } from '../lib/sampletime';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const fys = availableFys();
+const currentFy = fyOf(todayIso());
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+---
+
+<Base title="Sample Lead Time" connected={!!session} connectionLabel={connectionLabel}>
+  <main class="main leadtime" data-fy={String(currentFy)} data-odoo={session ? '1' : ''}>
+    <header class="page-head">
+      <div class="page-head-text">
+        <p class="eyebrow">Sales &amp; Development</p>
+        <h1>Lead Time</h1>
+        <p class="lede">
+          How long each sample or bulk order took from its date to completion, read live from
+          Odoo's PPC reports. Where a lead time comes out negative the order was revised after the
+          work was already finished; the revision that did it is shown beside the row.
+        </p>
+        <p class="hint" id="as-of" aria-live="polite">Loading the fiscal year…</p>
+      </div>
+
+      <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Dataset" id="ds-seg">
+          <button class="seg" type="button" role="tab" data-ds="sample" aria-selected="true">
+            Sample
+          </button>
+          <button class="seg" type="button" role="tab" data-ds="bulk" aria-selected="false">
+            Bulk
+          </button>
+        </div>
+
+        <div class="segmented" role="tablist" aria-label="Business unit" id="co-seg">
+          <button class="seg" type="button" role="tab" data-co="all" aria-selected="true">
+            Both units
+          </button>
+          <button class="seg" type="button" role="tab" data-co="zipper" aria-selected="false">
+            Zipper
+          </button>
+          <button class="seg" type="button" role="tab" data-co="mt" aria-selected="false">
+            Metal Trims
+          </button>
+        </div>
+
+        <div class="period-picker">
+          <select id="month-select" aria-label="Month">
+            <option value="">Whole year</option>
+          </select>
+        </div>
+
+        <div class="segmented" role="tablist" aria-label="Fiscal year" id="fy-seg">
+          {
+            fys.map((fy) => (
+              <button
+                class="seg"
+                type="button"
+                role="tab"
+                data-fy={String(fy)}
+                aria-selected={fy === currentFy ? 'true' : 'false'}
+              >
+                {fyLabel(fy)}
+              </button>
+            ))
+          }
+        </div>
+        <button class="btn" type="button" id="refresh">Refresh</button>
+      </div>
+    </header>
+
+    {
+      odooError && (
+        <div class="state error panel" style="margin-top:18px">
+          <p>Odoo is not reachable.</p>
+          <p class="hint">{odooError}</p>
+        </div>
+      )
+    }
+
+    <div class="panel state" id="lt-status" hidden>
+      <h2><span class="spinner"></span> Building the fiscal year</h2>
+      <p>
+        Odoo generates the sample BTM report on demand and a full year is around twenty thousand
+        samples, so the first read takes roughly half a minute. It is held after that.
+      </p>
+    </div>
+
+    <div id="lt-body" hidden={!!odooError}>
+      <div class="banner" id="error-banner" hidden></div>
+      <div class="banner warn" id="quality" hidden></div>
+
+      <section class="kpis" id="kpis"></section>
+
+      <section class="chart-grid">
+        <div class="panel card">
+          <div class="card-head">
+            <h2>Lead time month by month</h2>
+            <span class="hint" id="trend-note"></span>
+          </div>
+          <div class="chart-host" id="chart-trend"></div>
+        </div>
+
+        <div class="panel card">
+          <div class="card-head">
+            <h2>How long samples take</h2>
+            <span class="hint" id="dist-note"></span>
+          </div>
+          <div class="chart-host" id="chart-dist"></div>
+        </div>
+      </section>
+
+      <section class="chart-grid">
+        <div class="panel card">
+          <div class="card-head">
+            <h2>Month by month</h2>
+            <span class="hint">Volume, mean lead, and what went wrong.</span>
+          </div>
+          <div class="table-scroll" id="month-grid" style="max-height:330px"></div>
+        </div>
+
+        <div class="panel card">
+          <div class="card-head">
+            <h2>By business unit</h2>
+            <span class="hint" id="company-note"></span>
+          </div>
+          <div class="table-scroll" id="company-grid" style="max-height:330px"></div>
+        </div>
+      </section>
+
+      <section class="chart-grid">
+        <div class="panel card">
+          <div class="card-head">
+            <h2>By buyer</h2>
+            <span class="hint">Volume, and what it costs in days.</span>
+          </div>
+          <div class="table-scroll" id="buyer-grid" style="max-height:330px"></div>
+        </div>
+
+        <div class="panel card">
+          <div class="card-head">
+            <h2>By customer</h2>
+            <span class="hint">Same cut, on the ordering account.</span>
+          </div>
+          <div class="table-scroll" id="customer-grid" style="max-height:330px"></div>
+        </div>
+      </section>
+
+      <section class="panel card">
+        <div class="card-head">
+          <h2>Every order</h2>
+          <span class="hint" id="rows-note"></span>
+        </div>
+        <div class="chips-bar">
+          <span class="chips-label">Show</span>
+          <div id="lt-filters" class="chips-group">
+            <button class="chip active" type="button" data-only="all">All</button>
+            <button class="chip" type="button" data-only="negative">Negative lead time</button>
+            <button class="chip" type="button" data-only="late">Over 7 days</button>
+            <button class="chip" type="button" data-only="revised">Revised</button>
+            <button class="chip" type="button" data-only="pending">Still open</button>
+          </div>
+          <div class="toolbar-spacer"></div>
+          <input
+            class="table-search chips-search"
+            type="search"
+            id="lt-search"
+            placeholder="Customer, buyer, style, SA or OA number"
+          />
+        </div>
+        <div class="table-scroll" id="lt-grid"></div>
+        <div class="pager" id="lt-pager" hidden>
+          <button class="btn" type="button" id="page-prev">‹ Previous</button>
+          <span class="hint" id="page-label"></span>
+          <button class="btn" type="button" id="page-next">Next ›</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="../scripts/sampletime.ts"></script>
+</Base>

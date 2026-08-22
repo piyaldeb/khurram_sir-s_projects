@@ -10,6 +10,7 @@ no export/import step, no copies of the data:
 | **Production ABC** (`/analytics`) | Pareto analysis over the packing reports: which items, buyers and customers carry the value. |
 | **OT cost** (`/ot-cost`) | The `OT Cost` sheet, live — an OT month, a fiscal year, or year-to-date, split Manufacturing against Other Departments and measured against the OT plan and budget. |
 | **180+ stock** (`/ageing`) | The `180 plus days stock` workbook, live — raw material sat over 180 days, its month-by-month history, the usable/unusable split, and every lot in the band. |
+| **Lead time** (`/sample-leadtime`) | Sample and bulk lead time from Odoo's PPC reports — by fiscal year, month, business unit, buyer or customer, with the sales-module revision behind every negative figure. |
 
 ## Setup
 
@@ -589,6 +590,75 @@ months is megabytes, and only the month on screen is ever wanted. `?lots=YYYY-MM
 one month (~300KB, under half a second) and both the server and the page hold what they
 have fetched, because a closed snapshot never changes again.
 
+## Lead time
+
+Sample and bulk lead time, from Odoo's PPC wizard. Four controls: **dataset** (sample or
+bulk), **business unit**, **month**, and **fiscal year** — FY 25-26 and FY 26-27.
+
+### Where the numbers come from
+
+The same `ppc.report` wizard the PPC bulk BTM export uses, on three of its report types:
+
+| Report type | Odoo's name | What it gives |
+|---|---|---|
+| `sbtm_detail` | SA Based SAMPLE BTM DATA Detail | one row per sample line, with its completion date and a holiday sheet |
+| `bbtm` | OA Based Bulk BTM DATA | one row per bulk order line, with a lead time Odoo computes itself |
+| `samplehistory` | Sample History | the OA numbers a sample turned into, which is what makes OA search work |
+
+`skpi` (Sample KPI) is not used: Odoo returns HTTP 500 for it.
+
+The sample report's lead time is an Excel **formula**, not a value, so nothing downstream
+can read it without evaluating the workbook. This applies the report's own formula:
+
+    completion blank -> today      - SA date - (holidays in between)
+    otherwise        -> completion - SA date - (holidays in between)
+
+Holidays come from the report's own second sheet, so the arithmetic stays whatever Odoo
+says it is rather than a calendar of our own.
+
+### Two things that do not match between the datasets
+
+- **Sample deducts holidays; bulk does not.** Odoo's bulk report ships a plain calendar-day
+  figure and no holiday sheet beside it. Each is shown on its own basis and the header says
+  which — a 4-day bulk lead over a window containing one holiday is a 3-day sample lead.
+- **The wizard reports on one company at a time.** Passing both company ids returns the
+  first, not the union, so "Both units" is two builds merged here rather than one call.
+
+### Why a lead time goes negative
+
+Because the order was revised and its date moved *after* the work was already finished. So
+every row is joined to the sales module — `sale.order`'s `is_revised`, `revised_num`,
+`cause_of_revision` and `last_revised_date`, plus the `sales.revision` chain — and rows
+that carry one expand to show it.
+
+The chain's first entry holds the date the order had before any revision, which is the date
+the work actually ran to, so the row also shows a corrected lead time. SA030852 reports
+−30 days; measured from its original date it is **3 days**, and the cause reads "ADD COLOR
+NAME".
+
+FY 25-26 has 126 negative samples. About half carry a revision that explains them; the rest
+say plainly that Odoo has no revision on record.
+
+### A gap in the source worth knowing about
+
+**Metal Trims samples carry no completion date at all** — every row comes back "Pending",
+535 of them in FY 25-26. Their lead time is therefore measured against today, and the mean
+is the age of the backlog rather than how long a sample takes. The page prints a warning
+over any slice that is ≥90% open, because 276 days beside Zipper's 3.6 would otherwise read
+as a catastrophe rather than a gap.
+
+### Cost and paging
+
+A fiscal year is around 22,000 sample rows and one ~20s Odoo build per company per dataset,
+so each combination is built once and held — twelve hours for a closed year, fifteen
+minutes for the year in progress. The two companies build in parallel, so "Both units"
+costs the slower one rather than the sum.
+
+A year of rows is several megabytes, so the server filters, aggregates and pages: the
+figures are computed over everything the filters match, and only 200 rows travel. Search
+covers customer, buyer, style, buying house, and SA or OA number — numbers match on their
+digits, so "42035", "SA042035" and "sa 42035" all find the same sample.
+
 ## Layout
 
 ```
@@ -610,6 +680,7 @@ src/
     otcost.ts      OT analysis from Odoo: wizard, parse, per-month cache
     otanalysis.ts  the OT Cost sheet's arithmetic and the reading that goes with it
     ageing.ts      180+ days stock: ageing snapshots, lots, the unusable split
+    sampletime.ts  sample and bulk lead time, with the sales-module revisions
     charts.ts      inline-SVG bar and line charts
     storage.ts     flat-file JSON storage
   pages/
@@ -617,6 +688,7 @@ src/
     budget.astro   budget follow-up
     ot-cost.astro  OT cost
     ageing.astro   180+ days stock
+    sample-leadtime.astro  sample and bulk lead time
     api/report.ts     POST - run a report, return parsed JSON
     api/download.ts   GET  - stream the untouched xlsx
     api/lookup.ts     GET  - buyers, challans, work centres
@@ -626,6 +698,7 @@ src/
     api/summary.ts    GET  - fiscal-year and YTD rollups
     api/ot-cost.ts    GET  - OT cost for a month, a fiscal year, or YTD
     api/ageing.ts     GET  - the 180+ report, or ?lots=YYYY-MM for one month's lots
+    api/sample-leadtime.ts GET - lead time, filtered/aggregated/paged server-side
   scripts/         client-side logic for each page
   styles/app.css   design tokens (light + dark), components, charts
 ```

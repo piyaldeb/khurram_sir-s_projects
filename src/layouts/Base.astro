@@ -45,6 +45,12 @@ const path = Astro.url.pathname;
           <a href="/ageing" class:list={['nav-link', { active: path.startsWith('/ageing') }]}>
             180+ stock
           </a>
+          <a
+            href="/sample-leadtime"
+            class:list={['nav-link', { active: path.startsWith('/sample-leadtime') }]}
+          >
+            Sample lead time
+          </a>
         </nav>
         <div class="topbar-spacer"></div>
         <div class="conn" title={connectionLabel}>
