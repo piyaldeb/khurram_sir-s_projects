@@ -731,7 +731,8 @@ if (root) {
           <thead><tr>
             <th class="text">Section</th><th class="text">Unit</th><th class="text">Department</th>
             <th class="text">Tag</th><th class="text">Counts as</th>
-            <th class="num">Hours</th><th class="num">Cost $</th><th class="num">Share</th><th></th>
+            <th class="num">Hours</th><th class="num">Cost $</th><th class="num">Share</th>
+            <th class="bar-cell"></th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>

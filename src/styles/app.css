@@ -3090,3 +3090,129 @@ table.grid.mini th {
   color: var(--ink-2);
   padding: 14px 12px;
 }
+
+/* ------------------ 180+ stock and the OT day breakdown on a phone */
+
+@media (max-width: 640px) {
+  /*
+   * These labels carry the date they report on ("PREVIOUS DAY CONSUMPTION :
+   * 20 Aug 26"), so ellipsis would cut off the part that says what the figure
+   * means. Two lines is the cheaper trade.
+   */
+  .sum-row {
+    align-items: start;
+    gap: 8px;
+    padding: 6px 11px;
+  }
+
+  .sum-row dt {
+    white-space: normal;
+    font-size: 12px;
+    line-height: 1.32;
+  }
+
+  .sum-row dd {
+    font-size: 12.5px;
+  }
+
+  .split-keys {
+    gap: 10px 18px;
+  }
+
+  .split-key strong {
+    font-size: 16px;
+  }
+
+  .split-body {
+    padding: 2px 12px 14px;
+  }
+
+  /* The bar gives up width here, not the figures either side of it. */
+  .prof-row {
+    grid-template-columns: 50px minmax(0, 1fr) 78px 40px;
+    gap: 6px;
+  }
+
+  .prof-label,
+  .prof-value,
+  .prof-share {
+    font-size: 11.5px;
+  }
+
+  .profile {
+    padding: 4px 10px 10px;
+  }
+
+  /*
+   * The lot grid is twelve columns wide. Pin the product name so a row still
+   * says what it is however far right you swipe, and cap it under half the
+   * screen so the figures stay in view. Sticky cells need an opaque background
+   * of their own or the columns behind them show through.
+   */
+  table.grid.lot-grid th:first-child,
+  table.grid.lot-grid td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    /* Under half the screen, and never wide enough to crowd out the figures
+       on the roomiest phone. */
+    max-width: min(180px, 42vw);
+    background: var(--surface);
+  }
+
+  table.grid.lot-grid thead th:first-child {
+    z-index: 6;
+    background: var(--surface-sunk);
+  }
+
+  table.grid.lot-grid tbody tr:nth-child(even) td:first-child {
+    background: color-mix(in srgb, var(--surface-sunk) 55%, var(--surface));
+  }
+
+  table.grid.lot-grid tbody tr:hover td:first-child {
+    background: color-mix(in srgb, var(--accent-wash) 100%, var(--surface));
+  }
+
+  /*
+   * The day breakdown drops its three classification columns on a phone.
+   * Department, tag and counts-as repeat down the table and are readable in
+   * the Sections grid; hours, cost and share are what the row is opened for.
+   */
+  table.grid.mini th:nth-child(3),
+  table.grid.mini td:nth-child(3),
+  table.grid.mini th:nth-child(4),
+  table.grid.mini td:nth-child(4),
+  table.grid.mini th:nth-child(5),
+  table.grid.mini td:nth-child(5),
+  .bar-cell {
+    display: none;
+  }
+
+  .day-detail-box {
+    padding: 8px 9px 10px;
+  }
+
+  .day-detail-head {
+    gap: 3px 12px;
+    font-size: 11.5px;
+  }
+}
+
+@media (max-width: 400px) {
+  /* The share is still one tap away in the row's tooltip. */
+  .prof-row {
+    grid-template-columns: 46px minmax(0, 1fr) 74px;
+  }
+
+  .prof-share {
+    display: none;
+  }
+
+  .summary-grid {
+    gap: 10px;
+  }
+
+  .split-key strong {
+    font-size: 15px;
+  }
+}
