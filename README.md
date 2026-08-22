@@ -9,6 +9,7 @@ no export/import step, no copies of the data:
 | **Budget follow-up** (`/budget`) | `Monthly Budget vs Achievement`, live — as a month sheet, a fiscal year, or year-to-date, with charts. Targets come from the planning workbook; production is read from Odoo. |
 | **Production ABC** (`/analytics`) | Pareto analysis over the packing reports: which items, buyers and customers carry the value. |
 | **OT cost** (`/ot-cost`) | The `OT Cost` sheet, live — an OT month, a fiscal year, or year-to-date, split Manufacturing against Other Departments and measured against the OT plan and budget. |
+| **180+ stock** (`/ageing`) | The `180 plus days stock` workbook, live — raw material sat over 180 days, its month-by-month history, the usable/unusable split, and every lot in the band. |
 
 ## Setup
 
@@ -334,6 +335,22 @@ day columns are summed instead. Date headers come back year-less (`26 Jul Sun`),
 year is inferred from the requested window — which is what makes the January month,
 straddling two years, come out right.
 
+### What a day was spent on
+
+Every day in the day sheet that ran overtime opens: click the row (or focus it and press
+Enter) and the sections behind that day's total unfold underneath it — section, unit,
+department, tag, whether it counts as Manufacturing or Other, hours, cost, and share of
+that day. It nests in the row rather than opening a dialog so the days around it stay on
+screen to compare against.
+
+The breakdown is fetched one day at a time (`?day=YYYY-MM-DD`). Carrying every day's
+sections in the main payload made them 93% of it — 850KB of a 914KB year-to-date response
+— for a drill-down that is opened one day at a time. Each one is cached by day and by
+query, since the same date reads differently under a unit filter.
+
+Section costs sum to the day's total exactly, and their Manufacturing subset to the day's
+Manufacturing figure — the breakdown is the same arithmetic re-grouped, not a second pass.
+
 ### The exchange rate
 
 Odoo reports overtime in taka. The workbook divides by a flat **120**, which drifts as
@@ -447,6 +464,88 @@ what keeps it inside a serverless timeout.
 Odoo answers with real OT data from **April 2023**; `OT_EARLIEST_MONTH` bounds what the
 page offers so it never spends a report build on a window Odoo cannot fill.
 
+## 180+ days stock
+
+The `180 plus days stock` workbook, rebuilt against Odoo. Raw material that has sat for
+more than 180 days: what the band opened at, what aged into it, what was consumed out of
+it, and what is left — for every month Odoo has snapshotted, not just this one.
+
+Two controls in the header: a business unit (**both units**, **Zipper**, **Metal Trims**)
+and a **snapshot month**. Both are re-projections of one payload, so switching either is
+instant.
+
+### Where the numbers come from
+
+Odoo stores the ageing snapshots as real models, so nothing is exported or pasted:
+
+| Model | Carries |
+|---|---|
+| `stock.ageing.movement` | one row per lot per monthly snapshot; `slot_5` + `slot_6` are the 181-365 and 365+ that make up 180+ |
+| `rm.ageing.summary.report` | the same, aggregated to company x item category x classification, with all seven age buckets |
+| `rm.ageing.monthly.report` | opening -> new add -> issue -> closing through the 180+ band, per item category per month |
+| `stock.lot.unusable` | the flag that splits 180+ into what can still be consumed and what is only waiting to be written off |
+| `consolidated.inventory.report` | total inventory by month and fiscal year — the denominator behind "share of stock" |
+| `stock.move.line` | the done issues behind the month-to-date consumption figure, valued at the lot's own price |
+
+The bucket history is read straight off the stored summary rows rather than through
+`retrive_ageing_by_item_cat_data`, which answers for one bucket and one fiscal year per
+call and would need ~50 round trips to cover the same ground.
+
+Odoo's own dashboard is the origin of these endpoints; `180 days.har` is the capture they
+were read from.
+
+### The summary block
+
+The three panels under the KPI row are the workbook's `Dashboard` sheet, line for line
+and in its order — Zipper, Metal, and the two added together — because that is the block
+people read every morning and know the position of each figure in. What changes is the
+provenance: every figure is read from Odoo at load rather than pasted in overnight.
+
+`TOTAL Value ADD in 180+` is derived the way the sheet derives it: whatever the closing
+figure is that the opening and the month's consumption do not explain.
+
+### Usable against dead money
+
+The split that decides what anyone does about the number. Usable 180+ is a planning
+failure that can still be consumed; unusable 180+ is money already gone.
+
+`unusable` is a boolean on `stock.lot`, and Odoo accepts it as a dotted domain on the
+ageing snapshot — so two grouped reads give the split for all thirty months rather than
+one lot-level fetch per month. Usable + unusable reconciles to the movement dashboard's
+closing figure to the cent, in every month.
+
+The flag is **not historised**: it says what the lot is considered today, applied to
+whichever snapshot it appears in. A lot condemned last week therefore reads as unusable in
+older months too. That is still the useful question — how much of what was sitting there
+is value we now know is gone — but it is not a record of what anyone believed at the time,
+and the card says so on any month but the current one.
+
+### Charts
+
+`Aged in against consumed` diverges from a shared zero line on one symmetric scale, so a
+bar above and a bar below of equal length mean equal money, and the months where the band
+grew are the ones with the longer up-bar.
+
+`How the month moved` is a waterfall. A month typically moves 1-3% of a band worth half a
+million, which a zero-based axis would flatten to nothing, so the axis starts just below
+the data — and prints a line saying where it starts, because a truncated axis that does
+not announce itself exaggerates every change drawn on it.
+
+`Age profile of all stock` runs one hue light-to-dark across the seven buckets, since age
+is an ordered band rather than seven unrelated categories. The two past 180 days carry the
+alert hue: they are the only ones the page is asking anyone to act on.
+
+### Cost and caching
+
+Seven reads and ~300KB of JSON, over snapshots that only change when Odoo's monthly cron
+runs. The built report is held in process for `AGEING_CACHE_MS` (default 5 minutes);
+**Refresh** bypasses it. Odoo's history starts at **March 2024**.
+
+Lot detail is the one thing kept out of that payload — ~800 rows a month over thirty
+months is megabytes, and only the month on screen is ever wanted. `?lots=YYYY-MM` fetches
+one month (~300KB, under half a second) and both the server and the page hold what they
+have fetched, because a closed snapshot never changes again.
+
 ## Layout
 
 ```
@@ -467,12 +566,14 @@ src/
     fxrate.ts      today's USD/BDT rate, looked up and cached
     otcost.ts      OT analysis from Odoo: wizard, parse, per-month cache
     otanalysis.ts  the OT Cost sheet's arithmetic and the reading that goes with it
+    ageing.ts      180+ days stock: ageing snapshots, lots, the unusable split
     charts.ts      inline-SVG bar and line charts
     storage.ts     flat-file JSON storage
   pages/
     index.astro    report console
     budget.astro   budget follow-up
     ot-cost.astro  OT cost
+    ageing.astro   180+ days stock
     api/report.ts     POST - run a report, return parsed JSON
     api/download.ts   GET  - stream the untouched xlsx
     api/lookup.ts     GET  - buyers, challans, work centres
@@ -481,6 +582,7 @@ src/
     api/backfill.ts   POST - fetch and save a fiscal year / YTD
     api/summary.ts    GET  - fiscal-year and YTD rollups
     api/ot-cost.ts    GET  - OT cost for a month, a fiscal year, or YTD
+    api/ageing.ts     GET  - the 180+ report, or ?lots=YYYY-MM for one month's lots
   scripts/         client-side logic for each page
   styles/app.css   design tokens (light + dark), components, charts
 ```

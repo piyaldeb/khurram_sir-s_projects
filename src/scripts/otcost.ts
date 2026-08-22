@@ -19,6 +19,17 @@ interface BuSplit {
   total: number;
 }
 
+interface DaySection {
+  bu: string;
+  buLabel: string;
+  section: string;
+  department: string;
+  tag: string;
+  bucket: string;
+  cost: number;
+  hours: number;
+}
+
 interface OtDay {
   date: string;
   day: number;
@@ -140,6 +151,16 @@ if (root) {
     fy: Number(root.dataset.fy),
     grid: 'days' as GridMode,
     query: '',
+    /** ISO date of the day row whose section breakdown is open, if any. */
+    openDay: null as string | null,
+    /**
+     * Breakdowns already fetched, keyed by query and date.
+     *
+     * Keyed by query as well as date because the same day reads differently
+     * under a unit filter — a Zipper-only view must not show the day's Metal
+     * Trims sections just because the whole plant was looked at first.
+     */
+    dayCache: new Map<string, DaySection[]>(),
     result: null as OtReport | null,
   };
 
@@ -151,10 +172,20 @@ if (root) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  const usd = (v: number) => `$${nf.format(Math.round(v))}`;
+  /*
+   * Rounding must never turn a real figure into a zero.
+   *
+   * A section that spent $7 of a $22,000 month is 0.03% of it, and printing
+   * that as "0.0%" says it spent nothing. The same goes for money: a rounded
+   * "$0" against a row that plainly has hours on it reads as a bug. Both fall
+   * back to a "smaller than the smallest thing this column can show" mark.
+   */
+  const usd = (v: number) =>
+    v !== 0 && Math.abs(v) < 0.5 ? `<$1` : `$${nf.format(Math.round(v))}`;
   const bdt = (v: number) => `৳${nf2.format(v)}`;
   const usd2 = (v: number) => `$${nf2.format(v)}`;
   const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const share = (v: number) => (v !== 0 && Math.abs(v) < 0.0005 ? '<0.1%' : pct(v));
   const hrs = (v: number) => nf1.format(v);
   const esc = (s: string | number) =>
     String(s).replace(
@@ -218,7 +249,14 @@ if (root) {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
 
-      state.result = data as OtReport;
+      const next = data as OtReport;
+      // A day opened in one period has no row in another; drop it unless the
+      // new report still covers that date. Polling for pending reports re-enters
+      // here, so a day opened mid-fetch has to survive that.
+      if (state.openDay && !next.days.some((d) => d.date === state.openDay)) {
+        state.openDay = null;
+      }
+      state.result = next;
       render();
 
       // The server fills a few reports per request; keep asking while partial.
@@ -632,6 +670,76 @@ if (root) {
     `<td class="num${tinted ? ' tinted' : ''}">${v ? usd2(v) : '—'}</td>`;
 
   /**
+   * The sections behind one day's total, opened underneath its row.
+   *
+   * The day sheet answers "what did the plant spend"; this answers "on what",
+   * which is the question anyone asks the moment a day looks wrong. It nests in
+   * the same row rather than opening a dialog so the day above stays on screen
+   * to compare against, and so two days can be opened side by side.
+   *
+   * Each section is shown as a share of that day, not of the period — the row
+   * exists to apportion this one day's spend.
+   */
+  function breakdownRow(d: OtDay, span: number): string {
+    const sections = state.dayCache.get(`${query()}|${d.date}`);
+    if (!sections) {
+      return `<tr class="day-detail"><td colspan="${span}">
+        <div class="day-detail-box loading"><span class="spinner"></span> Reading ${esc(
+          dayLabel(d.date),
+        )}…</div>
+      </td></tr>`;
+    }
+    if (!sections.length) {
+      return `<tr class="day-detail"><td colspan="${span}">
+        <div class="day-detail-box">
+          <p class="hint" style="margin:0">No section detail for ${esc(dayLabel(d.date))}.</p>
+        </div>
+      </td></tr>`;
+    }
+
+    const rows = sections
+      .map((s) => {
+        const part = d.total ? s.cost / d.total : 0;
+        const shareLabel = share(part);
+        return `<tr>
+          <td class="text">${esc(s.section)}</td>
+          <td class="text">${esc(s.buLabel)}</td>
+          <td class="text">${esc(s.department || '—')}</td>
+          <td class="text">${esc(s.tag)}</td>
+          <td class="text">${s.bucket === 'manufacturing' ? 'Manufacturing' : 'Other'}</td>
+          <td class="num">${s.hours ? hrs(s.hours) : '—'}</td>
+          <td class="num tinted">${usd2(s.cost)}</td>
+          <td class="num">${shareLabel}</td>
+          <td class="bar-cell">
+            <span class="mini-bar"><i style="width:${(part * 100).toFixed(1)}%"></i></span>
+          </td>
+        </tr>`;
+      })
+      .join('');
+
+    const mfg = d.manufacturing.total;
+    return `<tr class="day-detail"><td colspan="${span}">
+      <div class="day-detail-box">
+        <div class="day-detail-head">
+          <strong>${esc(dayLabel(d.date))}</strong>
+          <span>${sections.length} section${sections.length === 1 ? '' : 's'} ran overtime</span>
+          <span>${usd2(d.total)} total</span>
+          <span>${d.total ? pct(mfg / d.total) : '—'} manufacturing</span>
+          <span>${d.hours.total ? `${hrs(d.hours.total)} hours` : 'no hours recorded'}</span>
+        </div>
+        <table class="grid mini">
+          <thead><tr>
+            <th class="text">Section</th><th class="text">Unit</th><th class="text">Department</th>
+            <th class="text">Tag</th><th class="text">Counts as</th>
+            <th class="num">Hours</th><th class="num">Cost $</th><th class="num">Share</th><th></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </td></tr>`;
+  }
+
+  /**
    * The OT Cost sheet's own day table.
    *
    * Filtered to one unit there is nothing to split, so the per-unit columns
@@ -645,17 +753,29 @@ if (root) {
         ? `${num(s.zipper)}${num(s.mt)}${num(s.total, true)}`
         : num(s.total, true);
 
+    // Manufacturing/Other are 3 columns each when both units show, 1 otherwise;
+    // plus day, date, total and hours.
+    const width = (both ? 3 : 1) * 2 + 4;
+
     const rows = r.days
-      .map(
-        (d) => `<tr>
-          <td class="sticky-col">${d.day}</td>
+      .map((d) => {
+        const open = state.openDay === d.date;
+        const canOpen = d.total > 0;
+        return (
+          `<tr class="day-row${canOpen ? ' can-open' : ''}${open ? ' open' : ''}"${
+            canOpen ? ` data-day="${esc(d.date)}" tabindex="0" role="button" aria-expanded="${open}"` : ''
+          }>
+          <td class="sticky-col">${
+            canOpen ? `<span class="disclose" aria-hidden="true">${open ? '▾' : '▸'}</span>` : ''
+          }${d.day}</td>
           <td class="text">${esc(dayLabel(d.date))}</td>
           ${cells(d.manufacturing)}
           ${cells(d.other)}
           ${num(d.total, true)}
           <td class="num">${d.hours.total ? hrs(d.hours.total) : '—'}</td>
-        </tr>`,
-      )
+        </tr>` + (open ? breakdownRow(d, width) : '')
+        );
+      })
       .join('');
 
     const t = r.totals;
@@ -792,8 +912,8 @@ if (root) {
           <td class="text">${s.bucket === 'manufacturing' ? 'Manufacturing' : 'Other'}</td>
           <td class="num">${s.hours ? hrs(s.hours) : '—'}</td>
           <td class="num tinted">${usd(s.cost)}</td>
-          <td class="num">${pct(s.share)}</td>
-          <td class="num">${pct(s.cumShare)}</td>
+          <td class="num">${share(s.share)}</td>
+          <td class="num">${share(s.cumShare)}</td>
           <td class="text">${s.cls}</td>
         </tr>`,
       )
@@ -959,6 +1079,56 @@ if (root) {
     state.grid = btn.dataset.grid as GridMode;
     renderChips(state.result);
     renderGrid(state.result);
+  });
+
+  /**
+   * Opening a day's breakdown; clicking the open one again closes it.
+   *
+   * The grid repaints straight away with a spinner in the detail row rather
+   * than waiting on the fetch, so the disclosure never feels stuck. Each
+   * breakdown is kept once fetched — a closed day's figures do not change.
+   */
+  async function toggleDay(date: string) {
+    if (!state.result) return;
+    state.openDay = state.openDay === date ? null : date;
+    repaintGrid(date);
+    if (state.openDay === null) return;
+
+    const key = `${query()}|${date}`;
+    if (state.dayCache.has(key)) return;
+
+    try {
+      const res = await fetch(`/api/ot-cost?${query()}&day=${date}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      state.dayCache.set(key, (data.sections ?? []) as DaySection[]);
+    } catch {
+      // An empty breakdown reads as "no detail" rather than spinning forever.
+      state.dayCache.set(key, []);
+    }
+    // The user may have closed it, or opened another, while this was in flight.
+    if (state.openDay === date && state.result) repaintGrid(date);
+  }
+
+  /** Repaints the grid and puts focus back on the row the render replaced. */
+  function repaintGrid(date: string) {
+    if (!state.result) return;
+    renderGrid(state.result);
+    el.grid.querySelector<HTMLElement>(`[data-day="${CSS.escape(date)}"]`)?.focus();
+  }
+
+  el.grid.addEventListener('click', (event) => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>('.day-row[data-day]');
+    if (row?.dataset.day) void toggleDay(row.dataset.day);
+  });
+
+  el.grid.addEventListener('keydown', (event) => {
+    const key = (event as KeyboardEvent).key;
+    if (key !== 'Enter' && key !== ' ') return;
+    const row = (event.target as HTMLElement).closest<HTMLElement>('.day-row[data-day]');
+    if (!row?.dataset.day) return;
+    event.preventDefault(); // Space would otherwise scroll the grid.
+    void toggleDay(row.dataset.day);
   });
 
   el.chips.addEventListener('input', (event) => {

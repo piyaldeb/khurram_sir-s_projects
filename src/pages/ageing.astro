@@ -1,0 +1,155 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+---
+
+<Base title="180+ Days Stock" connected={!!session} connectionLabel={connectionLabel}>
+  <main class="main ageing" data-odoo={session ? '1' : ''}>
+    <header class="page-head">
+      <div class="page-head-text">
+        <p class="eyebrow">Inventory</p>
+        <h1>180+ Days Stock</h1>
+        <p class="lede">
+          Raw material that has sat for more than 180 days, read live from Odoo's ageing snapshots.
+          Every month back to April 2024 is kept, so each figure carries its own history: what the
+          band opened at, what aged into it, what was consumed out of it, and what is left.
+        </p>
+        <p class="hint" id="as-of" aria-live="polite">Loading the ageing snapshots…</p>
+      </div>
+
+      <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Business unit" id="scope-seg">
+          <button class="seg" type="button" role="tab" data-scope="all" aria-selected="true">
+            Both units
+          </button>
+          <button class="seg" type="button" role="tab" data-scope="zipper" aria-selected="false">
+            Zipper
+          </button>
+          <button class="seg" type="button" role="tab" data-scope="mt" aria-selected="false">
+            Metal Trims
+          </button>
+        </div>
+
+        <div class="period-picker">
+          <button class="step" type="button" id="month-prev" aria-label="Previous month">‹</button>
+          <select id="month-select" aria-label="Snapshot month"></select>
+          <button class="step" type="button" id="month-next" aria-label="Next month">›</button>
+        </div>
+
+        <button class="btn" type="button" id="refresh">Refresh</button>
+      </div>
+    </header>
+
+    {
+      odooError && (
+        <div class="state error panel" style="margin-top:18px">
+          <p>Odoo is not reachable.</p>
+          <p class="hint">{odooError}</p>
+        </div>
+      )
+    }
+
+    <div id="ageing-body" hidden={!!odooError}>
+      <div class="banner" id="error-banner" hidden></div>
+
+      <!-- Headline figures for the selected month and unit. -->
+      <section class="kpis" id="kpis"></section>
+
+      <!-- The workbook's Dashboard block, line for line, read live. -->
+      <section class="summary-grid" id="summary" aria-label="Summary by business unit"></section>
+
+      <!-- The split that decides whether 180+ is a timing problem or a write-off. -->
+      <section class="panel card dead-card" id="split-card"></section>
+
+      <section class="chart-grid">
+        <div class="panel card">
+          <div class="card-head">
+            <h2>180+ value, month by month</h2>
+            <span class="hint" id="trend-note"></span>
+          </div>
+          <div class="chart-host" id="chart-trend"></div>
+        </div>
+
+        <div class="panel card">
+          <div class="card-head">
+            <h2>Aged in against consumed</h2>
+            <span class="hint">What entered the band each month, and what left it.</span>
+          </div>
+          <div class="chart-host" id="chart-flow"></div>
+        </div>
+      </section>
+
+      <section class="chart-grid">
+        <div class="panel card">
+          <div class="card-head">
+            <h2>Age profile of all stock</h2>
+            <span class="hint" id="profile-note"></span>
+          </div>
+          <div class="chart-host" id="chart-profile"></div>
+        </div>
+
+        <div class="panel card">
+          <div class="card-head">
+            <h2>How the month moved</h2>
+            <span class="hint">Opening, aged in, consumed, closing.</span>
+          </div>
+          <div class="chart-host" id="chart-waterfall"></div>
+        </div>
+      </section>
+
+      <!-- Category movement: the same four figures, one row per item category. -->
+      <section class="panel card" style="margin-bottom:16px">
+        <div class="card-head">
+          <h2>By item category</h2>
+          <span class="hint" id="cat-note"></span>
+          <div class="toolbar-spacer"></div>
+          <input class="table-search" type="search" id="cat-search" placeholder="Filter categories" />
+        </div>
+        <div class="table-scroll" id="cat-grid" style="max-height:420px"></div>
+      </section>
+
+      <!-- Lot level: the list someone actually works down. -->
+      <section class="panel card">
+        <div class="card-head">
+          <h2>Every lot in the band</h2>
+          <span class="hint" id="lot-note"></span>
+        </div>
+        <div class="chips-bar">
+          <span class="chips-label">Show</span>
+          <div id="lot-filters" class="chips-group">
+            <button class="chip active" type="button" data-filter="all">All</button>
+            <button class="chip" type="button" data-filter="unusable">Dead money</button>
+            <button class="chip" type="button" data-filter="usable">Still usable</button>
+            <button class="chip" type="button" data-filter="365">365+ only</button>
+            <button class="chip" type="button" data-filter="rejected">Rejected</button>
+          </div>
+          <div class="toolbar-spacer"></div>
+          <input
+            class="table-search chips-search"
+            type="search"
+            id="lot-search"
+            placeholder="Product, code, lot or category"
+          />
+        </div>
+        <div class="table-scroll" id="lot-grid"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="../scripts/ageing.ts"></script>
+</Base>

@@ -2549,3 +2549,544 @@ body {
     min-height: 32px;
   }
 }
+
+/* ------------------------------------------------- 180+ days stock (ageing) */
+
+.ageing {
+  max-width: 1500px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/*
+ * KPI tone is deliberately quiet: a coloured left edge and a coloured caption,
+ * never a coloured number. The figures stay comparable at a glance, and the
+ * tone says which direction is the bad one without shouting over them.
+ */
+.kpi.tone-bad {
+  box-shadow: inset 3px 0 0 var(--critical);
+}
+
+.kpi.tone-good {
+  box-shadow: inset 3px 0 0 var(--good);
+}
+
+.kpi.tone-bad .sub {
+  color: var(--critical);
+}
+
+.kpi.tone-good .sub {
+  color: var(--good);
+}
+
+/* --------------------------------------------------- usable vs dead money */
+
+.dead-card {
+  margin-bottom: 16px;
+}
+
+.split-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 22px;
+  padding: 2px 16px 16px;
+}
+
+.split-bar {
+  display: flex;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-sunk);
+}
+
+.split-seg.dead {
+  background: var(--critical);
+}
+
+.split-seg.live {
+  background: var(--accent);
+}
+
+.split-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  margin-top: 12px;
+}
+
+.split-key {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.split-key strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.split-key small {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-2);
+  margin-top: 1px;
+}
+
+.swatch.dead { background: var(--critical); }
+.swatch.live { background: var(--accent); }
+.swatch.age  { background: var(--ink-muted); }
+
+.split-key .swatch {
+  margin-top: 6px;
+}
+
+.split-units {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  border-left: 1px solid var(--grid);
+  padding-left: 22px;
+}
+
+.split-unit-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.split-unit-fig {
+  display: block;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+
+.split-unit-fig em {
+  font-style: normal;
+  color: var(--ink-muted);
+}
+
+.meter-fill.dead { background: var(--critical); }
+
+/* -------------------------------------------------------- age profile bars */
+
+.profile {
+  padding: 4px 14px 12px;
+}
+
+.prof-row {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 92px 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  border-radius: var(--radius-sm);
+}
+
+.prof-row:hover {
+  background: var(--accent-wash);
+}
+
+.prof-label {
+  font-size: 12px;
+  color: var(--ink-2);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.prof-track {
+  height: 15px;
+  background: var(--surface-sunk);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+/*
+ * One hue stepped light-to-dark, because age is an ordered band rather than
+ * seven unrelated categories. The two buckets past 180 days switch to the alert
+ * hue — they are the only ones this page is asking anyone to act on.
+ */
+.prof-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  min-width: 2px;
+}
+
+.prof-row.aged .prof-bar {
+  background: var(--critical);
+}
+
+.prof-row.aged .prof-label {
+  color: var(--critical);
+  font-weight: 600;
+}
+
+.prof-value,
+.prof-share {
+  font-size: 12.5px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.prof-share {
+  color: var(--ink-muted);
+}
+
+/* The step line joining one waterfall bar to the next. */
+.wf-link {
+  stroke: var(--rule);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+}
+
+/* ------------------------------------------------------- ageing tables */
+
+.chips-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip.active {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 550;
+}
+
+table.grid td.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+table.grid td.strong {
+  font-weight: 640;
+}
+
+table.grid td.up {
+  color: var(--critical);
+}
+
+table.grid td.down {
+  color: var(--good);
+}
+
+table.grid td.empty,
+p.empty {
+  text-align: center;
+  color: var(--ink-muted);
+  padding: 22px;
+}
+
+/* Product names are long; the lot table gives them room and clips the rest. */
+table.grid.lot-grid td:first-child {
+  max-width: 260px;
+}
+
+table.grid tr.is-dead td:first-child {
+  box-shadow: inset 2px 0 0 var(--critical);
+}
+
+.badge.ok,
+.badge.warn,
+.badge.dead {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.badge.ok {
+  color: var(--ink-2);
+  border-color: var(--grid);
+}
+
+.badge.warn {
+  color: var(--serious);
+  border-color: color-mix(in srgb, var(--serious) 45%, transparent);
+  background: color-mix(in srgb, var(--serious) 12%, transparent);
+}
+
+.badge.dead {
+  color: var(--critical);
+  border-color: color-mix(in srgb, var(--critical) 45%, transparent);
+  background: color-mix(in srgb, var(--critical) 12%, transparent);
+}
+
+.spark-cell {
+  padding-top: 2px !important;
+  padding-bottom: 0 !important;
+}
+
+.spark {
+  display: block;
+  overflow: visible;
+}
+
+.spark polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+
+.spark circle {
+  fill: var(--accent);
+}
+
+@media (max-width: 900px) {
+  .split-body {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .split-units {
+    border-left: 0;
+    border-top: 1px solid var(--grid);
+    padding-left: 0;
+    padding-top: 14px;
+  }
+
+  .prof-row {
+    grid-template-columns: 54px minmax(0, 1fr) 78px 44px;
+    gap: 7px;
+  }
+}
+
+/* ----------------------------------------- the workbook's summary block */
+
+/*
+ * Three panels of the same seven rows, in the workbook's order. Colour is an
+ * identity band on the heading only — the figures underneath stay plain, so a
+ * row means the same thing whichever panel it is read from.
+ */
+/* auto-fit with a fixed floor overflows below that floor; cap it to the box. */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(290px, 100%), 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.sum-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.sum-panel h3 {
+  margin: 0;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--accent-ink);
+  background: var(--ink-muted);
+}
+
+.sum-panel.zip h3 { background: var(--series-1); }
+.sum-panel.mt h3 { background: var(--good); }
+.sum-panel.total h3 { background: #7b6bc4; }
+
+.sum-panel dl {
+  margin: 0;
+  padding: 2px 0;
+}
+
+.sum-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--grid);
+}
+
+.sum-row:last-child {
+  border-bottom: 0;
+}
+
+.sum-row dt {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sum-row dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/*
+ * The workbook highlights the consumption rows in green because they are the
+ * good direction. Keeping that association means a tint on the figure rather
+ * than the whole row — the label still has to read as a label.
+ */
+.sum-row.out dd {
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.sum-row.add dd {
+  color: var(--serious);
+}
+
+.sum-row.head {
+  background: var(--surface-sunk);
+}
+
+.sum-row.head dt,
+.sum-row.head dd {
+  font-weight: 700;
+}
+
+/* A truncated y-axis has to say so, right under the chart it applies to. */
+.axis-note {
+  margin: 0;
+  padding: 0 10px 4px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+/* ------------------------------------- OT: a day's section breakdown */
+
+/*
+ * A day row that can be opened says so before it is clicked: a disclosure
+ * caret in the key column, and the pointer on hover. Rows with no overtime
+ * carry neither, because there is nothing under them.
+ */
+table.day-grid tr.day-row.can-open {
+  cursor: pointer;
+}
+
+table.day-grid tr.day-row.can-open:hover td {
+  background: var(--accent-wash);
+}
+
+table.day-grid tr.day-row.can-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+table.day-grid tr.day-row.open > td {
+  background: var(--accent-wash);
+  font-weight: 600;
+}
+
+table.day-grid tr.day-row.open > td.sticky-col {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.disclose {
+  display: inline-block;
+  width: 11px;
+  margin-right: 3px;
+  color: var(--accent);
+  font-size: 9px;
+}
+
+table.day-grid tr.day-detail > td {
+  padding: 0;
+  background: var(--surface-sunk);
+  white-space: normal;
+  border-bottom: 2px solid var(--rule);
+}
+
+.day-detail-box {
+  padding: 10px 12px 12px;
+  /* The parent grid scrolls sideways; the breakdown gets its own track so a
+     wide section table never stretches the day sheet's columns. */
+  overflow-x: auto;
+}
+
+.day-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.day-detail-head strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+table.grid.mini {
+  width: auto;
+  min-width: 100%;
+  font-size: 12px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+table.grid.mini th {
+  position: static;
+  cursor: default;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+table.grid.mini th.num {
+  text-align: right;
+}
+
+table.grid.mini td,
+table.grid.mini th {
+  padding: 4px 9px;
+}
+
+/* A bar per row turns the share column into something scannable at a glance. */
+.bar-cell {
+  width: 90px;
+  min-width: 90px;
+}
+
+.mini-bar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-sunk);
+  overflow: hidden;
+}
+
+.mini-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.day-detail-box.loading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  color: var(--ink-2);
+  padding: 14px 12px;
+}

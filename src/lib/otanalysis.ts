@@ -46,6 +46,18 @@ export type BuScope = BuKey | 'all';
 const forBu = (zipper: number, mt: number, bu: BuScope): BuSplit =>
   bu === 'zipper' ? split(zipper, 0) : bu === 'mt' ? split(0, mt) : split(zipper, mt);
 
+/** What one section spent on one day — the row behind a day's total. */
+export interface DaySection {
+  bu: BuKey;
+  buLabel: string;
+  section: string;
+  department: string;
+  tag: Tag;
+  bucket: Bucket;
+  cost: number;
+  hours: number;
+}
+
 export interface OtDay {
   date: string;
   /** 1-based position in the OT month, as the sheet numbers its rows. */
@@ -54,6 +66,14 @@ export interface OtDay {
   other: BuSplit;
   hours: BuSplit;
   total: number;
+  /**
+   * The sections that ran overtime that day, dearest first.
+   *
+   * Only the ones that actually spent — a plant has dozens of sections and
+   * almost none of them run every day, so carrying the zeroes would multiply
+   * the payload for rows nobody wants to read.
+   */
+  sections: DaySection[];
 }
 
 export interface SectionRow {
@@ -209,8 +229,8 @@ interface Accumulated {
   byDate: Map<string, { mfg: [number, number]; oth: [number, number]; hrs: [number, number] }>;
   /** `${bu}::${section}` -> totals */
   bySection: Map<string, { bu: BuKey; section: string; cost: number; hours: number }>;
-  /** date -> section key -> USD. Kept in memory only, so a spike can say why. */
-  byDateSection: Map<string, Map<string, number>>;
+  /** date -> section key -> that day's spend, so a day can say where it went. */
+  byDateSection: Map<string, Map<string, { cost: number; hours: number }>>;
   unmapped: Set<string>;
 }
 
@@ -259,8 +279,12 @@ function accumulate(entries: OtJobMonth[], rate: number, bu: BuScope = 'all'): A
         day.hrs[i] += hours;
         acc.byDate.set(date, day);
 
-        const perSection = acc.byDateSection.get(date) ?? new Map<string, number>();
-        perSection.set(sectionKey, (perSection.get(sectionKey) ?? 0) + cost);
+        const perSection =
+          acc.byDateSection.get(date) ?? new Map<string, { cost: number; hours: number }>();
+        const cell = perSection.get(sectionKey) ?? { cost: 0, hours: 0 };
+        cell.cost += cost;
+        cell.hours += hours;
+        perSection.set(sectionKey, cell);
         acc.byDateSection.set(date, perSection);
       });
 
@@ -269,6 +293,38 @@ function accumulate(entries: OtJobMonth[], rate: number, bu: BuScope = 'all'): A
   }
 
   return acc;
+}
+
+/**
+ * One day's spend broken out by section, dearest first.
+ *
+ * The section key is `${bu}::${section}`; the same section name exists under
+ * both units, so the unit has to come back out of the key rather than be
+ * guessed from the name.
+ */
+function daySections(acc: Accumulated, date: string): DaySection[] {
+  const perSection = acc.byDateSection.get(date);
+  if (!perSection) return [];
+
+  const rows: DaySection[] = [];
+  for (const [key, cell] of perSection) {
+    if (!cell.cost && !cell.hours) continue;
+    const cut = key.indexOf('::');
+    const bu = key.slice(0, cut) as BuKey;
+    const section = key.slice(cut + 2);
+    const def = sectionDef(bu, section);
+    rows.push({
+      bu,
+      buLabel: BU_LABEL[bu],
+      section,
+      department: def?.department ?? '',
+      tag: (def?.tag ?? 'M-NVA') as Tag,
+      bucket: bucketOf(bu, section),
+      cost: cell.cost,
+      hours: cell.hours,
+    });
+  }
+  return rows.sort((a, b) => b.cost - a.cost);
 }
 
 function rankSections(acc: Accumulated, total: number): SectionRow[] {
@@ -320,6 +376,7 @@ function buildDays(acc: Accumulated, months: string[]): OtDay[] {
         other: oth,
         hours: split(d?.hrs[0] ?? 0, d?.hrs[1] ?? 0),
         total: mfg.total + oth.total,
+        sections: daySections(acc, date),
       });
     });
   }
@@ -334,7 +391,6 @@ function median(values: number[]): number {
 }
 
 function analyse(
-  acc: Accumulated,
   days: OtDay[],
   sections: SectionRow[],
   totals: OtReport['totals'],
@@ -355,13 +411,10 @@ function analyse(
       date: d.date,
       total: d.total,
       ratio: d.total / typical,
-      topSections: [...(acc.byDateSection.get(d.date) ?? new Map())]
-        .sort((a, b) => b[1] - a[1])
+      // The day already carries its own breakdown, sorted dearest first.
+      topSections: d.sections
         .slice(0, 3)
-        .map(([key, cost]) => {
-          const [bu, section] = key.split('::');
-          return { section, buLabel: BU_LABEL[bu as BuKey] ?? bu, cost };
-        }),
+        .map((s) => ({ section: s.section, buLabel: s.buLabel, cost: s.cost })),
     }));
 
   const vaTotals = new Map<Tag, number>();
@@ -541,7 +594,7 @@ export async function buildOtReport(opts: BuildOptions): Promise<OtReport> {
     budgetActual: actualWhere('budget'),
     planGaps: plan.gaps,
     budgetGaps: budget.gaps,
-    analysis: analyse(acc, days, sections, totals, byMonth, previous),
+    analysis: analyse(days, sections, totals, byMonth, previous),
     unmapped: [...acc.unmapped].sort(),
     errors: entries
       .filter((e) => e.error)
