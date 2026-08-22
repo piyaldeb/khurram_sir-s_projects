@@ -1173,7 +1173,24 @@ function renderLots() {
 
   if (note) {
     const dead = sum(rows.filter((r) => r.unusable).map((r) => r.value));
-    note.textContent = `${rows.length} lots · ${money(total)} · ${money(dead)} of it unusable`;
+    const parts = [`${rows.length} lots`, money(total), `${money(dead)} of it unusable`];
+
+    /*
+     * Odoo rebuilds the lot-level snapshot on a slower cycle than the summary
+     * one the headline figures come from, so in the month in progress this
+     * table can be a step behind the total above it. Better to name the gap
+     * than to let two figures for the same thing sit on one page unexplained.
+     */
+    const { usable, unusable } = splitAt();
+    const headline = usable + unusable;
+    const gap = headline - sum(all.map((r) => r.value));
+    if (headline && Math.abs(gap) > 1) {
+      parts.push(
+        `${money(Math.abs(gap))} ${gap > 0 ? 'behind' : 'ahead of'} the ${money(headline)} above — ` +
+          `Odoo refreshes lot detail less often than the monthly totals`,
+      );
+    }
+    note.textContent = parts.join(' · ');
   }
 
   host.querySelectorAll<HTMLElement>('th[data-sort]').forEach((th) => {

@@ -198,16 +198,23 @@ async function buildReport(): Promise<AgeingReport> {
   const { byCompany: lotsByCompany, priceOfLot } = await fetchLots(asOf);
   const daily = await fetchDailyConsumption(asOf, priceOfLot);
 
-  const companies: CompanyReport[] = COMPANIES.map((c) => ({
-    key: c.key,
-    id: c.id,
-    name: c.name,
-    movement: alignMovement(movement.byCompany.get(c.id) ?? [], months),
-    buckets: alignBuckets(summary.byCompany.get(c.id) ?? new Map(), months),
-    categories: monthly.byCompany.get(c.id) ?? [],
-    split: alignSplit(split.get(c.id) ?? new Map(), months),
-    lots: lotsByCompany.get(c.key) ?? [],
-  }));
+  const companies: CompanyReport[] = COMPANIES.map((c) => {
+    const buckets = alignBuckets(summary.byCompany.get(c.id) ?? new Map(), months);
+    const movementPoints = reconcileCurrentMonth(
+      alignMovement(movement.byCompany.get(c.id) ?? [], months),
+      buckets,
+    );
+    return {
+      key: c.key,
+      id: c.id,
+      name: c.name,
+      movement: movementPoints,
+      buckets,
+      categories: monthly.byCompany.get(c.id) ?? [],
+      split: reconcileSplit(alignSplit(split.get(c.id) ?? new Map(), months), movementPoints),
+      lots: lotsByCompany.get(c.key) ?? [],
+    };
+  });
 
   return {
     generatedAt: new Date().toISOString(),
@@ -550,7 +557,8 @@ async function fetchDailyConsumption(
         [
           ['state', '=', 'done'],
           ['lot_id', 'in', lotIds],
-          ['date', '>=', `${asOf}-01 00:00:00`],
+          // The Dhaka month starts six hours before the UTC one.
+          ['date', '>=', utcAt(`${asOf}-01`)],
           // Consumption means it left stock for production, not an internal hop.
           ['location_dest_id.usage', 'in', ['production', 'customer', 'inventory']],
         ],
@@ -561,7 +569,7 @@ async function fetchDailyConsumption(
 
     const byDate = new Map<string, DailyPoint>();
     for (const line of lines) {
-      const date = String(line.date ?? '').slice(0, 10);
+      const date = dhakaDate(line.date);
       if (!date) continue;
       const price = priceOfLot.get(`${idOf(line.product_id)}:${idOf(line.lot_id)}`) ?? 0;
       const value = num(line.quantity) * price;
@@ -629,6 +637,59 @@ function alignBuckets(by: Map<string, BucketPoint>, months: string[]): BucketPoi
 
 function alignSplit(by: Map<string, SplitPoint>, months: string[]): SplitPoint[] {
   return months.map((month) => by.get(month) ?? { month, usable: 0, unusable: 0 });
+}
+
+/**
+ * Brings the month in progress up to today.
+ *
+ * Two Odoo models describe the same band and they agree to the dollar for every
+ * closed month — but the movement dashboard rebuilds its current-month row on a
+ * slower cycle than the summary report, which carries a snapshot dated today.
+ * On 22 Aug the dashboard still had Zipper's August closing at the figure from
+ * earlier in the month, $9,801 behind the live one.
+ *
+ * The summary snapshot wins for the last month, and `newAdd` is re-derived so
+ * `opening + newAdd + issue = closing` still holds. That residual is exactly
+ * what the workbook calls "TOTAL Value ADD in 180+", and re-deriving it is what
+ * makes this page agree with the workbook rather than trail it by a day.
+ *
+ * Closed months are left alone: they are settled, and a bucket total that
+ * disagreed with one would be a real discrepancy worth seeing, not one to paper
+ * over.
+ */
+function reconcileCurrentMonth(
+  movement: MovementPoint[],
+  buckets: BucketPoint[],
+): MovementPoint[] {
+  const i = movement.length - 1;
+  const point = movement[i];
+  const bucket = buckets[i];
+  if (!point || !bucket) return movement;
+
+  const live = bucket.value.slice(AGED_FROM).reduce((a, b) => a + b, 0);
+  // No snapshot for the month yet, or the two already agree.
+  if (!live || Math.abs(live - point.closing) < 0.01) return movement;
+
+  const out = [...movement];
+  out[i] = { ...point, closing: live, newAdd: live - point.opening - point.issue };
+  return out;
+}
+
+/**
+ * The usable side of the split is whatever the band holds that is not condemned.
+ *
+ * Deriving it rather than summing it keeps the two halves adding to the closing
+ * figure even in the month in progress, where the lot-level snapshot behind
+ * `unusable` can be a day behind the closing figure above it. Unusable is the
+ * half that holds still — condemned lots are not consumed and not replaced —
+ * so it is the half worth trusting when the two sources disagree.
+ */
+function reconcileSplit(split: SplitPoint[], movement: MovementPoint[]): SplitPoint[] {
+  return split.map((point, i) => {
+    const closing = movement[i]?.closing;
+    if (closing === undefined || point.usable + point.unusable === 0) return point;
+    return { ...point, usable: Math.max(closing - point.unusable, 0) };
+  });
 }
 
 // ------------------------------------------------------------------ scoping
@@ -710,6 +771,31 @@ function monthKey(v: unknown): string | null {
   const parsed = new Date(`${raw} 1`);
   if (Number.isNaN(parsed.getTime())) return null;
   return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Odoo stores datetimes in UTC; the plant runs on Asia/Dhaka, six hours ahead.
+ *
+ * Bucketing a move by its UTC date puts anything issued after 18:00 Dhaka onto
+ * the previous day — and an evening shift is exactly when overtime consumption
+ * happens, so this is not a rare edge. Bangladesh has no daylight saving, so a
+ * fixed offset is right rather than merely close.
+ */
+const DHAKA_OFFSET_MS = 6 * 60 * 60 * 1000;
+
+/** The UTC instant at which a given Dhaka calendar day begins. */
+function utcAt(dhakaDay: string): string {
+  const start = new Date(`${dhakaDay}T00:00:00Z`).getTime() - DHAKA_OFFSET_MS;
+  return new Date(start).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/** The Dhaka calendar day an Odoo UTC timestamp falls on. */
+function dhakaDate(value: unknown): string | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const at = new Date(`${raw.replace(' ', 'T')}Z`);
+  if (Number.isNaN(at.getTime())) return null;
+  return new Date(at.getTime() + DHAKA_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 const idOf = (v: unknown): number | null => (Array.isArray(v) ? Number(v[0]) : null);

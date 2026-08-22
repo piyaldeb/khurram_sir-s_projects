@@ -494,6 +494,23 @@ call and would need ~50 round trips to cover the same ground.
 Odoo's own dashboard is the origin of these endpoints; `180 days.har` is the capture they
 were read from.
 
+### Two models, one band
+
+`stock.ageing.movement` and `rm.ageing.summary.report` describe the same 180+ band and
+agree to the dollar for every closed month. They part company on the month in progress:
+the movement dashboard rebuilds its current-month row on a slower cycle, while the summary
+report carries a snapshot dated today. On 22 Aug the dashboard still had Zipper's August
+closing $9,801 behind the live figure.
+
+So the summary snapshot wins for the last month, and `newAdd` is re-derived to keep
+`opening + newAdd + issue = closing`. That residual is exactly what the workbook calls
+"TOTAL Value ADD in 180+". Closed months are left alone — a bucket total that disagreed
+with a settled month would be a real discrepancy worth seeing, not one to paper over.
+
+Usable is likewise derived as `closing − unusable` rather than summed from lots, so the
+two halves add to the closing figure even when the lot-level snapshot is a day behind.
+Unusable is the half that holds still: condemned lots are neither consumed nor replaced.
+
 ### The summary block
 
 The three panels under the KPI row are the workbook's `Dashboard` sheet, line for line
@@ -503,6 +520,32 @@ provenance: every figure is read from Odoo at load rather than pasted in overnig
 
 `TOTAL Value ADD in 180+` is derived the way the sheet derives it: whatever the closing
 figure is that the opening and the month's consumption do not explain.
+
+### What matches the workbook, and what does not
+
+All eighteen rows of the summary block — three panels, six rows each — reconcile to the
+workbook exactly, as do eleven of the twelve age-bucket figures. The twelfth is Zipper's
+0-30 bucket, which runs ahead of the workbook by whatever was received since the workbook
+was last exported; that is the bucket new receipts land in.
+
+Two things do not tie, and are worth knowing about:
+
+- **Historic bucket totals** can sit $84-$2,100 away from the same month's closing figure
+  (Zipper, 23 of 29 months; worst case 0.5%). That is a disagreement between two Odoo
+  models about a settled month, not something this page introduces. The current month is
+  exact.
+- **Per-day consumption** is a derivation, not a reproduction. The workbook's own row is
+  usually blank — its formula looks up *yesterday* and the daily table normally ends the
+  day before — so there is nothing to match. This page instead reads the done move lines
+  against lots in the band and values them at the lot's price, then names the day it is
+  reporting. Its month total comes to about 11% above the workbook's equivalent, because
+  the workbook matches by invoice name where this matches by lot, and values at the issue
+  register's price rather than the lot's. Treat it as an indicator of daily pace, not as a
+  figure to reconcile.
+
+Move lines are bucketed by **Asia/Dhaka** date, not the UTC date Odoo stores. An evening
+shift is exactly when overtime consumption happens, and a UTC day would push it onto the
+day before.
 
 ### Usable against dead money
 
@@ -537,7 +580,7 @@ alert hue: they are the only ones the page is asking anyone to act on.
 
 ### Cost and caching
 
-Seven reads and ~300KB of JSON, over snapshots that only change when Odoo's monthly cron
+Eight reads and ~300KB of JSON, over snapshots that only change when Odoo's monthly cron
 runs. The built report is held in process for `AGEING_CACHE_MS` (default 5 minutes);
 **Refresh** bypasses it. Odoo's history starts at **March 2024**.
 
