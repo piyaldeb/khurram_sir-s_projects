@@ -153,6 +153,8 @@ if (root) {
 
   interface Row {
     name: string;
+    /** What the workbook wrote where a number was expected. */
+    note: string | null;
     count: number;
     /** Orders the workbook could judge. */
     judged: number;
@@ -211,6 +213,7 @@ if (root) {
       if (!row) {
         row = {
           name: key,
+          note: null,
           count: 0,
           judged: 0,
           onTime: 0,
@@ -228,11 +231,12 @@ if (root) {
       row.count += 1;
       row.series[i] += 1;
       row.members.push(x);
+      row.actual += x.actual;
+      if (!row.note && x.note) row.note = x.note;
       if (x.pending) row.pending += 1;
       if (x.gap !== null && x.expected !== null) {
         row.judged += 1;
         row.expected += x.expected;
-        row.actual += x.actual;
         row.gap += x.gap;
         if (x.gap > row.worst) row.worst = x.gap;
         if (x.onTime) row.onTime += 1;
@@ -241,9 +245,16 @@ if (root) {
     }
 
     for (const row of rows.values()) {
+      /*
+       * Taken is averaged over every order, because Odoo knows how long each
+       * one took whether or not the workbook has an expectation to judge it
+       * against. Averaging it over the judged ones only threw away a figure we
+       * hold — which is how H&M, the largest buyer at over a thousand orders,
+       * came to show a dash for a lead time that is perfectly well known.
+       */
+      if (row.count) row.actual /= row.count;
       if (row.judged) {
         row.expected /= row.judged;
-        row.actual /= row.judged;
         row.gap /= row.judged;
       }
       // Worst first inside a row: the order that blew the expectation is the
@@ -268,7 +279,7 @@ if (root) {
         expected: judged.length
           ? judged.reduce((a, x) => a + (x.expected ?? 0), 0) / judged.length
           : 0,
-        actual: judged.length ? judged.reduce((a, x) => a + x.actual, 0) / judged.length : 0,
+        actual: filtered.length ? filtered.reduce((a, x) => a + x.actual, 0) / filtered.length : 0,
       },
       perMonth,
     };
@@ -490,8 +501,8 @@ if (root) {
               row.judged ? row.expected : null,
             )}</b><span class="oa-stat-note">average</span></div>
             <div class="oa-stat"><span class="oa-stat-label">Taken</span><b class="oa-stat-figure">${days(
-              row.judged ? row.actual : null,
-            )}</b><span class="oa-stat-note">average</span></div>
+              row.count ? row.actual : null,
+            )}</b><span class="oa-stat-note">average of all ${qty(row.count)}</span></div>
             <div class="oa-stat"><span class="oa-stat-label">Gap</span><b class="oa-stat-figure"><span class="edd-gap ${
               row.gap > 0 ? 'late' : 'early'
             }">${signed(row.judged ? row.gap : null)}</span></b></div>
@@ -558,13 +569,23 @@ if (root) {
           )}" tabindex="0" role="button" aria-expanded="${open}">
             <td class="sticky-col"><span class="disclose" aria-hidden="true">${
               open ? '▾' : '▸'
-            }</span>${esc(row.name)}</td>
+            }</span>${esc(row.name)}${
+              row.note
+                ? `<span class="edd-policy" title="${esc(
+                    row.note,
+                  )}">policy</span>`
+                : ''
+            }${
+              row.judged === 0 && row.count
+                ? '<span class="edd-policy" title="The workbook gives no day count for this buyer, so these orders are counted but not judged.">not judged</span>'
+                : ''
+            }</td>
             <td class="num tinted">${qty(row.count)}</td>
             <td class="bar-cell"><span class="mini-bar"><i style="width:${(
               widest ? (row.count / widest) * 100 : 0
             ).toFixed(1)}%"></i></span></td>
             <td class="num">${days(row.judged ? row.expected : null)}</td>
-            <td class="num">${days(row.judged ? row.actual : null)}</td>
+            <td class="num">${days(row.count ? row.actual : null)}</td>
             ${gapCell(row.judged ? row.gap : null)}
             <td class="num">${qty(row.onTime)}</td>
             <td class="num">${qty(row.late)}</td>
@@ -619,8 +640,11 @@ if (root) {
       (missing
         ? `${missing} buyers in the year are not in the workbook, so their orders cannot be judged: ${r!.missingBuyers
             .slice(0, 8)
-            .join(', ')}${missing > 8 ? ', …' : ''}.`
-        : '');
+            .join(', ')}${missing > 8 ? ', …' : ''}. `
+        : '') +
+      'A buyer marked "policy" wrote a sentence rather than a day count — hover it to read what ' +
+      'they actually asked for. Those orders still carry their real lead time; only the ' +
+      'comparison is missing.';
   }
 
   /* ---------------------------------------------------------------- render */
