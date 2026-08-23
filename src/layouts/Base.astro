@@ -37,10 +37,20 @@ const quality = [
   { href: '/ccr', label: 'CCR', hint: 'Customer complaints, and where they stand' },
 ];
 
+/**
+ * Lead time is now two questions: how long things take, and how long the buyer
+ * expected them to.
+ */
+const lead = [
+  { href: '/sample-leadtime', label: 'Sample & bulk', hint: 'How long an order takes' },
+  { href: '/buyer-edd', label: 'Buyer expectation', hint: 'Expected against actual' },
+];
+
 const groups = [
   { id: 'sales', label: 'Sales', items: sales },
   { id: 'rm', label: 'RM', items: rm },
   { id: 'quality', label: 'Quality', items: quality },
+  { id: 'lead', label: 'Lead time', items: lead },
 ];
 const activeGroup = (items: { href: string }[]) => items.some((i) => path.startsWith(i.href));
 ---
@@ -103,12 +113,6 @@ const activeGroup = (items: { href: string }[]) => items.some((i) => path.starts
           </a>
           <a href="/ot-cost" class:list={['nav-link', { active: path.startsWith('/ot-cost') }]}>
             OT cost
-          </a>
-          <a
-            href="/sample-leadtime"
-            class:list={['nav-link', { active: path.startsWith('/sample-leadtime') }]}
-          >
-            Lead time
           </a>
         </nav>
         <div class="topbar-spacer"></div>

@@ -1,0 +1,1336 @@
+{
+  "source": "Buyer wise EDD (2 July'26).xlsx",
+  "company": "Zipper",
+  "note": "Buyer expectations are hand-kept in the workbook and have no Odoo model. Standard sliders decide which of a buyer's two figures an order is judged against.",
+  "buyers": [
+    {
+      "buyer": "4F",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "ACADEMY",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "ACES",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "Adairs",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "ADITYA BIRLA",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "ADLER",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "AFS FASHION",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "AKADEMIKS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "AKSHARDHAM",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "ALCOTT",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "ALDI",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "ALPHA-6",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "AM LONDON",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "AMERICAN RAG",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "AMIGO PROVISIONS",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "ARAMIS",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "ARCO",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "ARSANA",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "ASOS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "ATLAS THE BRAND",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "B&S",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BAAZAR KOLKATA",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BABY SHOP",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "BABYHUG",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "BANANA REPUBLIC",
+      "standardDays": 5,
+      "nonStandardDays": 12
+    },
+    {
+      "buyer": "BEALLS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "BEAR_ZXY",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BEBE",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "Belamionix",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BEN SHERMAN",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "Ben Sherman (Signet)",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BENCH",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BERKLEE",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BERNADETTE",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BERSHKA",
+      "standardDays": 7,
+      "nonStandardDays": 10
+    },
+    {
+      "buyer": "BESTSELLER",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "BESTSELLER ( JACK & JONES )",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "BHPC",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BIG W",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "BOARDRIDER",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BONPRIX",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BOOHOO",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BOSCOV'S",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "BRAND STUDIO",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "BRUNN & STENGADE",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "C&A",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "CAMP DAVID",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "CARRY",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "CARTER'S",
+      "standardDays": 20,
+      "nonStandardDays": 22
+    },
+    {
+      "buyer": "CATALYST",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "CHANDRAMUKHI IMPEX LTD.",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "CHAPS",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "CHETRIT",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "COMPANY 81",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "Conbipel",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "COPPEL",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "CORVEX",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "D-MART",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "DEFACTO",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "DENIM KOREA",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "DIESEL",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "DKNY",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "DO GOODS",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "DPAM",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "DUNELM",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "DUNNES",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "DUNNES STORES",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "DVN",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "ERNSTING'S FAMILY",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "ETOS S.A.",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "EWM",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "EXPRESS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "EZEKIEL",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "FAM BRANDS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "FAME FASHION HOUSE",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "FEME STAGE",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "FL TEXTIL",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "FLYING MACHINE",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "FOREVER 21",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "FORTUNE",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "FREE PLANET",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "FUSION",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "GAP",
+      "standardDays": 5,
+      "nonStandardDays": 12
+    },
+    {
+      "buyer": "GAS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "GEMO",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "GEORGE ASDA",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "GEORGE USA",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "GLOBAL APPAREL",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "GO COLORS",
+      "standardDays": 7,
+      "nonStandardDays": 10
+    },
+    {
+      "buyer": "Golden Touch",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "GONSO",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "GREY STATE",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "GT",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "GUESS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "H&M",
+      "standardDays": null,
+      "nonStandardDays": null,
+      "note": "Urgent/Speed orders: Partial start from 5 w/d and close by 8 w/days Regular orders: Partial start from 8 w/d and close by 12 w/days"
+    },
+    {
+      "buyer": "HERVIS",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "Huggies",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "HUGO BOSS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "HURLEY",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "IDENTITY",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "Indeep",
+      "standardDays": 14,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "INDIAN GARAGE CO.",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "IP SPIRINA",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "IZOD",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "JACK & JONES",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "JACKSON REED",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "JAMES ROSS COLLECTION (JRC)",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "JC PENNEY",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "JEHSONTEX",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "JOHN RICHMOND",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "JUSTICE",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "K-MART",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "KENNETH COLE",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "KOHL'S",
+      "standardDays": 7,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "KONTOOR",
+      "standardDays": 13,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "LA HALLE",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "La Redoute",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "LAGER 157",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "LAGO",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "LANDMARK",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "LAVI",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "LEE",
+      "standardDays": 13,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "LEFTIES",
+      "standardDays": 7,
+      "nonStandardDays": 10
+    },
+    {
+      "buyer": "LIFE STYLE",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "LPP",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "MACY'S",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "MANGO",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "MANOR",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "Marcus",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "MASCOT",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "MATALAN",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "MAX FASHION (DUBAI)",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "MAX FASHION (INDIA)",
+      "standardDays": 7,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "MEIJER",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "Melon Fashion",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "MIK MAK INC",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "Mizuno",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "MOD APPAREL",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "MOMENT",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "MONSOON",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "MORGAN",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "MRK",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "MUFTI",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "MYNTRA",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "NAA-ADEI LAURA MARMON (NLM)",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "NATH",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "NAVIGATOR",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "NBROWN",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "NEW FRONTIER",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "NEW LOOK",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "NEW YORKER",
+      "standardDays": 10,
+      "nonStandardDays": 12
+    },
+    {
+      "buyer": "NEXT",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "NKD",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "NORDICFORM",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "NORDSTROM",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "OKAIDI",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "OLD NAVY",
+      "standardDays": 5,
+      "nonStandardDays": 12
+    },
+    {
+      "buyer": "ONLY",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "ONLY & SONS",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "OSTIN",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "PANTALOONS",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "PAPER DENIM",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "PARAFFIN",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "PEPCO",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "PERRY ELLIS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "PETER ENGLAND",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "POLO RL",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "PREMIER UK",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "PRIMARK",
+      "standardDays": 7,
+      "nonStandardDays": 10
+    },
+    {
+      "buyer": "PULL AND BEAR",
+      "standardDays": 7,
+      "nonStandardDays": 10
+    },
+    {
+      "buyer": "PUMA",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "QVC USA",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "RALPH LAUREN",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "RALPH LAUREN LUXURY",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "RED CHIEF",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "RED TAPE",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "REDTAG",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "RELIANCE",
+      "standardDays": 7,
+      "nonStandardDays": 10
+    },
+    {
+      "buyer": "RENNER",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "REVER FLOW",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "RIACHUELO",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "RING OF FIRE (ROF)",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "RITCHIE JEANS",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "RIVER ISLAND",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "ROBI DI KAPPA",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "ROSS STORES",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "ROXY",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SAINSBURY'S",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SALT ROCK",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SAM'S CLUB",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "SCB GROUP",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SCOTCH & SODA",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SERGENT MAJOR",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "Shoppers",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SIGGI GROUP",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SIKSILK",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SIPLEC",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SONNY BONO",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "SPLASH",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "SPRINGFIELD",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SPYDER",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "SRG",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "STADIUM",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "STYLE UNION",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "SUPERDRY",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "Systeme U",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TAHARI",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "TAKKO",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "TARGET",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TB INTERNATIONAL",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TEK GEAR",
+      "standardDays": 7,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "TESCO",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "The Purple Door",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "THE STING",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "THE WAREHOUSE",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "THE WORKWEAR GROUP",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TIFFOSI",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TILLYS",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TJ Maxx",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TJX",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TKO",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "TOKMANNI",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TOM TAILOR",
+      "standardDays": 14,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TOMMY HILFIGER",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "TOPITOP",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TRUE RELIGION",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "TRUE WORTH INC",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "TRUSSARDI",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TSD",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "TUCTUC",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "UMBRO",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "UNIBRANDS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "UNIFORM WAREHOUSE",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "VANS",
+      "standardDays": 14,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "VICTORIA LOPEZ CASTRO (VLC)",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "VILA",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "VINTAGE VTG",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "VOLCOM",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "WALMART CANADA",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "WALMART MEXICO",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "WALMART USA",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "WAREHOUSE",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "WARWICK INTERNATIONAL LIMITED",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "WARWICKSHIRE CLOTHING",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "WEATHERPROOF VINTAGE",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "WESTSIDE",
+      "standardDays": 5,
+      "nonStandardDays": 14,
+      "note": "TATA TRENT"
+    },
+    {
+      "buyer": "WINCLASS IMPORT INC",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "WOOLWORTHS",
+      "standardDays": 12,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "WRANGLER",
+      "standardDays": 13,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "X-RAY JEANS",
+      "standardDays": 10,
+      "nonStandardDays": 14
+    },
+    {
+      "buyer": "YM INC",
+      "standardDays": 12,
+      "nonStandardDays": 16
+    },
+    {
+      "buyer": "ZARA",
+      "standardDays": 7,
+      "nonStandardDays": 10
+    },
+    {
+      "buyer": "ZARA BOYS",
+      "standardDays": 7,
+      "nonStandardDays": 10
+    },
+    {
+      "buyer": "ZARA MAN",
+      "standardDays": 7,
+      "nonStandardDays": 10
+    },
+    {
+      "buyer": "ZARA TRF",
+      "standardDays": 5,
+      "nonStandardDays": 10
+    },
+    {
+      "buyer": "ZUDIO",
+      "standardDays": 5,
+      "nonStandardDays": 14,
+      "note": "TATA TRENT"
+    }
+  ],
+  "standardSliders": {
+    "M-4": [
+      "TZP-305",
+      "TZP-294",
+      "TZP-331",
+      "TZP-373",
+      "TZP-305 SL",
+      "TZP-2160 SL"
+    ],
+    "M-5": [
+      "TZP-645",
+      "TZP-624",
+      "TZP-48",
+      "297"
+    ],
+    "M-8": [
+      "279",
+      "282",
+      "283"
+    ],
+    "Inv": [
+      "TZP-1862"
+    ],
+    "C-3": [
+      "TZP-793",
+      "TZP-794"
+    ],
+    "C-3 2 Way": [
+      "TZP-2239",
+      "286",
+      "287",
+      "288"
+    ],
+    "C-5": [
+      "TZP-491"
+    ],
+    "P-3": [
+      "TZP-1019",
+      "TZP-2240",
+      "297"
+    ],
+    "P-5": [
+      "TZP-1970",
+      "TZP-1977"
+    ]
+  }
+}

@@ -4483,3 +4483,104 @@ table.rmd-ship td.mono {
   white-space: nowrap;
   cursor: default;
 }
+
+/* ------------------------------------- Buyer expectation against lead time */
+
+/*
+ * The gap is the whole report: days taken minus days expected. Late is what
+ * costs a relationship, so late is the loud one — and the sign carries the
+ * meaning as well as the colour, so it survives a greyscale print.
+ */
+.edd-gap {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.edd-gap.late {
+  color: var(--critical);
+}
+
+.edd-gap.early {
+  color: var(--good);
+}
+
+/* Which of the buyer's two figures applied. */
+.edd-class {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.edd-class.standard {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.edd-class.non-standard {
+  background: color-mix(in srgb, var(--warning, var(--series-2)) 16%, transparent);
+  color: var(--ink-2);
+}
+
+.edd-class.unknown {
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+}
+
+.edd-mixed {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: help;
+}
+
+.edd-worst {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.edd-worst-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px 40px;
+  align-items: center;
+  gap: 9px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.edd-worst-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.edd-worst-row b {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* A hairline that separates the grouping chips from the filtering ones. */
+.chips-divide {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 4px;
+  background: var(--rule);
+}
+
+table.edd-orders {
+  min-width: 940px;
+}
+
+table.edd-orders td.mono {
+  font-family: var(--mono);
+  font-size: 11px;
+}

@@ -1,0 +1,78 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+---
+
+<Base title="Buyer expectation · Odoo" connected={!!session} connectionLabel={connectionLabel}>
+  <main class="main edd" data-odoo={session ? '1' : ''}>
+    <header class="page-head">
+      <div class="page-head-text">
+        <p class="eyebrow">Lead time · Zipper bulk</p>
+        <h1>Buyer expectation</h1>
+        <p class="lede">
+          What each buyer expects a bulk order to take, against what it actually took — by OA,
+          by item, and by the slider that decides which figure applies.
+        </p>
+      </div>
+
+      <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Fiscal year" id="edd-fy"></div>
+      </div>
+    </header>
+
+    {
+      odooError && (
+        <div class="panel state error banner">
+          <h2>Odoo is not connected</h2>
+          <p>{odooError}</p>
+        </div>
+      )
+    }
+
+    <div class="panel state" id="edd-status">
+      <h2><span class="spinner"></span> Building the year</h2>
+      <p>
+        Odoo builds the bulk lead-time report a year at a time, which takes a minute the first
+        time. The Lead time page shares the same cache.
+      </p>
+    </div>
+
+    <div class="day-layout" id="edd-body" hidden>
+      <aside class="day-rail" id="edd-rail"></aside>
+
+      <section class="day-main">
+        <section class="panel card">
+          <div class="card-head">
+            <h2>How late, and how often</h2>
+            <span class="hint" id="edd-trend-note"></span>
+          </div>
+          <div class="chart-host" id="edd-trend"></div>
+        </section>
+
+        <div class="chips-bar panel" id="edd-chips" style="margin-top:16px"></div>
+
+        <div class="panel card day-card">
+          <div class="table-scroll" id="edd-grid" style="max-height:none"></div>
+        </div>
+        <p class="hint" id="edd-note"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="../scripts/buyeredd.ts"></script>
+</Base>
