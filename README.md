@@ -726,6 +726,50 @@ because within one product most of the spec is identical and eight variants prin
 are eight identical paragraphs. What is left is the token that actually differs — usually the
 size.
 
+### What the page leads with
+
+The order book runs weeks ahead of the floor, so the rail opens on the **month in progress**:
+what has been released so far, the pace those days project across the whole month, the trailing
+twelve-month average, and the same month a year ago. A part-month total on its own reads as a
+collapse every time you look at it on the 3rd, so the pace is the figure that gets judged and
+the average is the mark it is judged against — both on one scale, so the gap between them is
+the reading.
+
+The rail used to carry fourteen months of bars underneath that. It was the trend chart again in
+less room, so it is gone; the chart keeps the whole run, ruled at each April with the fiscal
+year named in the band it opens, and the average drawn across it.
+
+**Movement** is the only block that says something changed:
+
+- **New** — first released inside the window. Over all of history that is every product that
+  did not exist in April 2023, which is most of the catalogue and says nothing, so the
+  whole-history case falls back to a rolling twelve months and says which it used.
+- **Quiet** — nothing released for three months or more, counting only products inside the 95%
+  cut. A class-C product going quiet is the tail behaving like a tail.
+
+### Reading the sheet without opening a row
+
+Every row already held its own month-by-month series, so it draws one: a **Trend** sparkline
+scaled to its own maximum, shape only. The cumulative column earns its place by banding the
+sheet **A / B / C** at the 80 and 95% cuts — the same language Production ABC uses, so a product
+that is class A there and class C here says something rather than just looking inconsistent. A
+rule where the band changes does the work a heading row would.
+
+### Filtering to one month
+
+The month picker narrows whatever period is selected rather than replacing it, so picking
+FY 26-27 offers that year's months and nothing else. Two things change when the sheet is one
+month:
+
+- **The charts stay wider than the sheet.** A chart of one bar says nothing, so the trend chart
+  and the opened product's chart both show the year running up to that month, and say so.
+- **"Months" goes and the sparkline becomes a "Run-up".** The column could only ever say 1, and
+  a series of one point draws nothing.
+
+The drill-down is scoped to the same months the row is counting (`from` / `to` on the API).
+Without that the breakdowns would be the product's whole life shown underneath a row that is one
+month of it, and every share would read over 100%.
+
 ### Cost and caching
 
 Grouping one month by product and company takes Odoo about six seconds. Each month's
@@ -758,7 +802,7 @@ src/
     sampletime.ts  sample and bulk lead time, with the sales-module revisions
     oarelease.ts   OA released: per-month product/company aggregates from sale.order
     cache.ts       derived aggregates, in Supabase or on disk
-    charts.ts      inline-SVG bar and line charts
+    charts.ts      inline-SVG bar, line and row-sized sparkline charts
     storage.ts     flat-file JSON storage
   pages/
     index.astro    report console
@@ -777,7 +821,7 @@ src/
     api/ot-cost.ts    GET  - OT cost for a month, a fiscal year, or YTD
     api/ageing.ts     GET  - the 180+ report, or ?lots=YYYY-MM for one month's lots
     api/sample-leadtime.ts GET - lead time, filtered/aggregated/paged server-side
-    api/oa-released.ts     GET - every month of OA release, or ?product= for one product
+    api/oa-released.ts     GET - every month of OA release, or ?product=&from=&to= for one
   scripts/         client-side logic for each page
   styles/app.css   design tokens (light + dark), components, charts
 ```

@@ -340,9 +340,16 @@ export interface RecentOrder {
   value: number;
 }
 
+/** The slice a drill-down describes — the same one its row is counting. */
+export interface MonthRange {
+  from: string;
+  to: string;
+}
+
 export interface ProductDetail {
   product: string;
   companyId: number | null;
+  range: MonthRange | null;
   byVariant: Breakdown[];
   byCode: Breakdown[];
   byCustomer: Breakdown[];
@@ -360,16 +367,27 @@ const likeEscape = (s: string) => s.replace(/([%_\\])/g, '\\$1');
  * months — so this only fetches what the roll-up threw away: which variants,
  * which internal codes, which customers, and the last OAs to carry it. Each is
  * a sub-second grouped read, so they go together.
+ *
+ * `range` scopes it to the same months the row is counting. Without it the
+ * breakdowns would be the product's whole life shown underneath a row that is
+ * one month of it, and every share would read over 100%.
  */
 export async function productDetail(
   product: string,
   companyId: number | null = null,
+  range: MonthRange | null = null,
 ): Promise<ProductDetail> {
   const context = await ctx();
   const domain: unknown[] = [
     ['product_id.name', '=like', `${likeEscape(product)}%`],
     ...OA_LINE_DOMAIN,
     ...(companyId ? [['company_id', '=', companyId]] : []),
+    ...(range
+      ? [
+          ['order_id.date_order', '>=', monthBounds(range.from)[0]],
+          ['order_id.date_order', '<=', monthBounds(range.to)[1]],
+        ]
+      : []),
   ];
 
   const top = (field: string) => ({
@@ -433,6 +451,7 @@ export async function productDetail(
   return {
     product,
     companyId,
+    range,
     byVariant: mapped(variants, 'product_id', '(no variant)'),
     byCode: mapped(codes, 'product_code', '(no code)'),
     byCustomer: mapped(customers, 'order_partner_id', '(no customer)'),

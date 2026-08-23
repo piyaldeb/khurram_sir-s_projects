@@ -1,8 +1,10 @@
 import type { APIRoute } from 'astro';
 import { OdooError } from '~/lib/odoo';
-import { oaHistory, productDetail } from '~/lib/oarelease';
+import { oaHistory, productDetail, type MonthRange } from '~/lib/oarelease';
 
 export const prerender = false;
+
+const MONTH = /^\d{4}-\d{2}$/;
 
 /**
  * OA released, by product and company.
@@ -22,7 +24,19 @@ export const GET: APIRoute = async ({ url }) => {
       if (company !== null && !Number.isInteger(company)) {
         return json({ error: 'company must be "all" or a company id' }, 400);
       }
-      return json(await productDetail(product, company));
+
+      // Both or neither: half a range would silently read from 2023.
+      const from = url.searchParams.get('from');
+      const to = url.searchParams.get('to');
+      let range: MonthRange | null = null;
+      if (from || to) {
+        if (!from || !to || !MONTH.test(from) || !MONTH.test(to) || from > to) {
+          return json({ error: 'from and to must both look like 2026-08, from first' }, 400);
+        }
+        range = { from, to };
+      }
+
+      return json(await productDetail(product, company, range));
     }
 
     const batch = Number(url.searchParams.get('batch'));

@@ -33,6 +33,15 @@ export interface ChartOptions {
   yTitle?: string;
   /** Prefix for axis ticks, e.g. "$" when the scale is money. */
   unit?: string;
+  /**
+   * Category indices to rule off before — fiscal-year starts, mostly. A run of
+   * 41 months reads as one undifferentiated wall without them.
+   */
+  dividers?: number[];
+  /** Labels for the bands the dividers cut, keyed by the index they start at. */
+  bandLabels?: Record<number, string>;
+  /** A level worth marking across the plot: the average, a target, a budget. */
+  reference?: { value: number; label: string };
 }
 
 const PAD = { top: 16, right: 16, bottom: 34, left: 62 };
@@ -118,6 +127,49 @@ export function barChart(opts: ChartOptions): string {
   const bars: string[] = [];
   const hits: string[] = [];
 
+  /*
+   * Dividers sit in the gap before their column, and the band they open is
+   * labelled just inside it. Both are drawn under the bars so a divider never
+   * cuts across a column it is meant to sit beside.
+   */
+  const marks: string[] = [];
+  for (const i of opts.dividers ?? []) {
+    if (i <= 0 || i >= n) continue;
+    const x = PAD.left + slot * i;
+    marks.push(
+      `<line class="c-divider" x1="${x.toFixed(1)}" y1="${PAD.top}" x2="${x.toFixed(1)}" y2="${(
+        PAD.top + plotH
+      ).toFixed(1)}" />`,
+    );
+  }
+  for (const [key, label] of Object.entries(opts.bandLabels ?? {})) {
+    const i = Number(key);
+    if (!Number.isFinite(i) || i < 0 || i >= n) continue;
+    marks.push(
+      `<text class="c-band" x="${(PAD.left + slot * i + 3).toFixed(1)}" y="${(PAD.top + 10).toFixed(
+        1,
+      )}">${esc(label)}</text>`,
+    );
+  }
+
+  if (opts.reference && opts.reference.value > 0) {
+    const refY = y(opts.reference.value);
+    // Only worth drawing while it is inside the plot; above the tallest tick it
+    // would sit on the frame and say nothing.
+    if (refY >= PAD.top && refY <= PAD.top + plotH) {
+      marks.push(
+        `<line class="c-ref-line" x1="${PAD.left}" y1="${refY.toFixed(1)}" x2="${(
+          PAD.left + plotW
+        ).toFixed(1)}" y2="${refY.toFixed(1)}" />` +
+          // Left, just inside the axis: the right edge is where the newest and
+          // usually tallest bars are, and a label there sits on the data.
+          `<text class="c-ref-label" x="${(PAD.left + 4).toFixed(1)}" y="${(refY - 5).toFixed(
+            1,
+          )}">${esc(opts.reference.label)}</text>`,
+      );
+    }
+  }
+
   categories.forEach((cat, i) => {
     const x0 = PAD.left + slot * i + (slot - groupW) / 2;
     let stackTop = plotH + PAD.top;
@@ -159,9 +211,43 @@ export function barChart(opts: ChartOptions): string {
 
   return `${legend(series)}<svg class="chart" viewBox="0 0 ${opts.width} ${height}" width="${opts.width}" height="${height}" role="img">
     ${grid}
+    ${marks.join('')}
     <line class="c-axis" x1="${PAD.left}" y1="${(PAD.top + plotH).toFixed(1)}" x2="${(PAD.left + plotW).toFixed(1)}" y2="${(PAD.top + plotH).toFixed(1)}" />
     ${bars.join('')}
     ${hits.join('')}
+  </svg>`;
+}
+
+/**
+ * A row-sized trend line — no axes, no labels, just the shape.
+ *
+ * A table of totals says which products are big; it cannot say which are
+ * growing. One of these per row answers that without opening anything, so the
+ * sheet is readable on its own.
+ *
+ * It is scaled to its own maximum, so it reads as shape only. Comparing
+ * heights between rows would be meaningless and the design does not invite it.
+ */
+export function sparkline(
+  values: number[],
+  opts: { width?: number; height?: number; color?: string } = {},
+): string {
+  const width = opts.width ?? 76;
+  const height = opts.height ?? 22;
+  const color = opts.color ?? '--series-1';
+  if (values.length < 2) return `<svg class="spark" width="${width}" height="${height}"></svg>`;
+
+  const top = Math.max(...values, 0) || 1;
+  const pad = 2;
+  const x = (i: number) => (i / (values.length - 1)) * width;
+  const y = (v: number) => height - pad - (v / top) * (height - pad * 2);
+
+  const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const last = values[values.length - 1];
+
+  return `<svg class="spark" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" preserveAspectRatio="none" aria-hidden="true">
+    <polyline points="${points}" fill="none" stroke="var(${color})" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+    <circle cx="${x(values.length - 1).toFixed(1)}" cy="${y(last).toFixed(1)}" r="1.7" fill="var(${color})" />
   </svg>`;
 }
 

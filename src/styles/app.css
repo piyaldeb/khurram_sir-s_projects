@@ -2160,6 +2160,45 @@ table.day-grid td.muted {
   color: var(--ink-muted);
 }
 
+/* ---- chart annotations: fiscal-year bands and a reference level */
+
+/*
+ * Forty-one months in a row is a wall. A rule at each April and the year named
+ * inside the band it opens turns it into four readable stretches, without
+ * adding a colour or a legend entry to do it.
+ */
+.c-divider {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.c-band {
+  fill: var(--ink-muted);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* The average is a level to read against, not a series — dashed and neutral,
+   so it never competes with the bars it explains. */
+.c-ref-line {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.42;
+}
+
+.c-ref-label {
+  fill: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
 /* Pareto: one hue in ordinal steps — ABC is an ordered band, not categories. */
 .pareto .c-bar.abc-A { fill: var(--accent); }
 .pareto .c-bar.abc-B { fill: color-mix(in srgb, var(--accent) 55%, var(--surface-sunk)); }
@@ -3722,6 +3761,173 @@ table.grid td small {
   }
 }
 
+/* ---- the rail: the month in progress, and what moved */
+
+.oa-momentum-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.oa-momentum-head h2 {
+  margin: 0;
+}
+
+.oa-momentum-window {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.oa-momentum .rail-figure {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.oa-delta {
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.oa-delta.up {
+  background: color-mix(in srgb, var(--good) 13%, transparent);
+  color: var(--good);
+}
+
+.oa-delta.down {
+  background: color-mix(in srgb, var(--critical) 13%, transparent);
+  color: var(--critical);
+}
+
+/*
+ * The pace bar and the twelve-month marker share one scale, so the gap between
+ * them IS the reading. Two separate full-width bars would each say nothing.
+ */
+.oa-pace {
+  position: relative;
+  height: 6px;
+  margin-top: 11px;
+  border-radius: 3px;
+  background: var(--surface-sunk);
+  overflow: visible;
+}
+
+.oa-pace-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.oa-pace-mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--ink);
+}
+
+.oa-pace-key {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.oa-movement {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.oa-movement li {
+  display: flex;
+  gap: 9px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.oa-move-count {
+  flex: none;
+  min-width: 24px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.oa-move-count.up {
+  color: var(--good);
+}
+
+.oa-move-count.down {
+  color: var(--warning, var(--critical));
+}
+
+/* ---- the sheet: class bands and a trend per row */
+
+table.oa-sheet th.cls-cell,
+table.oa-sheet td.cls-cell {
+  text-align: center;
+  border-left: 1px solid var(--grid);
+}
+
+table.oa-sheet th.spark-cell,
+table.oa-sheet td.spark-cell {
+  text-align: center;
+  width: 84px;
+  min-width: 84px;
+}
+
+/* A row-sized trend needs no baseline of its own — the row is the baseline. */
+.spark {
+  display: block;
+  margin: 0 auto;
+  width: 72px;
+  height: 20px;
+  overflow: visible;
+}
+
+/*
+ * Class A rows carry most of the value, so they carry the weight. C is the
+ * tail: still legible, but it should not compete for the eye.
+ */
+.oa-name.cls-A {
+  font-weight: 600;
+}
+
+.oa-name.cls-C {
+  color: var(--ink-2);
+}
+
+.mini-bar i.cls-B {
+  background: var(--series-2);
+}
+
+.mini-bar i.cls-C {
+  background: var(--ink-muted);
+  opacity: 0.5;
+}
+
+/* Where the band changes, the rule does the work a heading row would. */
+table.oa-sheet tbody tr.day-row.band-end > td {
+  border-bottom-color: var(--rule);
+  border-bottom-width: 2px;
+}
+
 /* The rank sits inside the product cell, so the sticky key column carries the
    name people scan for rather than a number nobody looks up. */
 .oa-rank {
@@ -3735,4 +3941,47 @@ table.grid td small {
 
 .oa .day-grid .sticky-col {
   min-width: 260px;
+}
+
+/*
+ * The month picker narrows whatever period is selected, so it sits beside the
+ * period control and borrows its shape — a pill, not a form field. It only
+ * looks selected once a month is actually chosen; "Every month" is the resting
+ * state and should read as quietly as the segmented control's own background.
+ */
+.oa-month-pick {
+  padding: 6px 30px 6px 15px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunk);
+  color: var(--ink-2);
+  font: 560 13.5px/1.25 inherit;
+  cursor: pointer;
+  appearance: none;
+  /* The caret is drawn rather than fetched: a background-image URL would be an
+     external request the CSP blocks, and the native arrow ignores the pill. */
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    right 15px top 50%,
+    right 10px top 50%;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+
+.oa-month-pick:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.oa-month-pick.picked {
+  background-color: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.oa-month-pick:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
