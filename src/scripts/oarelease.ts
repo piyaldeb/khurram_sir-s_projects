@@ -278,7 +278,11 @@ if (root) {
     soFar: number;
     /** What this pace lands on by month end. */
     pace: number;
+    /** The previous fiscal year's average month, and how it is labelled. */
     average: number;
+    averageLabel: string;
+    /** How many months of that year carried anything. */
+    averageMonths: number;
     lastYear: number;
     lastYearMonth: string;
     delta: number;
@@ -523,12 +527,20 @@ if (root) {
   }
 
   /**
-   * The month in progress, against the twelve behind it.
+   * The month in progress, against the previous fiscal year's average month.
    *
    * The order book leads the floor by weeks, so the question this page is
    * opened with is "is work still coming in" - and a part-month total answers
    * it wrongly on its own. The pace projects the days elapsed across the whole
-   * month, and the twelve-month average is what it gets judged against.
+   * month, and an average month is what it gets judged against.
+   *
+   * That average is the last full fiscal year rather than a rolling twelve.
+   * A rolling window is the more responsive measure, but it straddles two
+   * years - in August it would run from the previous August - and every other
+   * figure on this site is read against a fiscal year. A benchmark that means
+   * something different from the year buttons above it is a benchmark people
+   * misread. If the year is not complete in the data, it falls back to the
+   * rolling twelve and says so on the card.
    *
    * Always the live month and always in money, whatever the filters say: it is
    * a reading of the business, not of the slice on screen.
@@ -550,11 +562,25 @@ if (root) {
     const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
     const elapsed = isCurrent ? Math.min(now.getDate(), daysInMonth) : daysInMonth;
 
-    const trailing = h.months
-      .slice(-13, -1)
+    // The last full fiscal year: the one before the live month's.
+    const prevFy = fyOf(live.month) - 1;
+    const inPrevFy = h.months
+      .filter((doc) => fyOf(doc.month) === prevFy)
       .map((doc) => slices(doc).reduce((a, c) => a + c.value, 0))
       .filter((v) => v > 0);
-    const average = trailing.length ? trailing.reduce((a, v) => a + v, 0) / trailing.length : 0;
+
+    // A part-year would flatter or punish the pace depending on which months
+    // happened to be held, so it only counts when the year is whole.
+    const usePrevFy = inPrevFy.length === 12;
+    const benchmark = usePrevFy
+      ? inPrevFy
+      : h.months
+          .slice(-13, -1)
+          .map((doc) => slices(doc).reduce((a, c) => a + c.value, 0))
+          .filter((v) => v > 0);
+    const average = benchmark.length
+      ? benchmark.reduce((a, v) => a + v, 0) / benchmark.length
+      : 0;
 
     const lastYearMonth = `${y - 1}-${String(m).padStart(2, '0')}`;
     const pace = elapsed ? (soFar / elapsed) * daysInMonth : soFar;
@@ -566,6 +592,8 @@ if (root) {
       soFar,
       pace,
       average,
+      averageLabel: usePrevFy ? fyLabel(prevFy) : 'last 12 months',
+      averageMonths: benchmark.length,
       lastYear: valueOf(lastYearMonth),
       lastYearMonth,
       delta: average ? pace / average - 1 : 0,
@@ -674,11 +702,13 @@ if (root) {
         ${usd(m.soFar)}
         <span class="oa-delta ${up ? 'up' : 'down'}">${up ? '+' : ''}${(m.delta * 100).toFixed(
           0,
-        )}% vs 12-mth</span>
+        )}% vs ${esc(m.averageLabel)}</span>
       </p>
-      <p class="rail-sub">On this pace <strong>${usd(m.pace)}</strong> by month end. The trailing
-      twelve months average ${usd(m.average)}${
-        m.lastYear ? `; ${esc(monthShort(m.lastYearMonth))} was ${usd(m.lastYear)}` : ''
+      <p class="rail-sub">On this pace <strong>${usd(m.pace)}</strong> by month end. An average
+      month of ${esc(m.averageLabel)} was ${usd(m.average)}${
+        m.averageMonths === 12 ? '' : ` (${m.averageMonths} months)`
+      }${
+        m.lastYear ? `; ${esc(monthShort(m.lastYearMonth))} itself was ${usd(m.lastYear)}` : ''
       }.</p>
       <div class="oa-pace">
         <span class="oa-pace-fill" style="width:${((m.soFar / ceiling) * 100).toFixed(1)}%"></span>
@@ -686,7 +716,9 @@ if (root) {
           1,
         )}%"></span>
       </div>
-      <div class="oa-pace-key"><span>released so far</span><span>marker: 12-month average</span></div>
+      <div class="oa-pace-key"><span>released so far</span><span>marker: ${esc(
+        m.averageLabel,
+      )} average month</span></div>
     </section>`;
   }
 

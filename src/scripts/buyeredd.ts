@@ -675,6 +675,8 @@ if (root) {
     const r = state.report;
     const missing = r?.missingBuyers.length ?? 0;
     el.note.textContent =
+      `Zipper bulk orders only — the workbook's expectations are written for zipper, and sample ` +
+      `and other companies are not judged against them. ` +
       `Expected days come from ${r?.source ?? 'the EDD workbook'}; a standard item gets the ` +
       `buyer's shorter figure and anything else the longer one, decided by the slider Odoo ` +
       `records on the order. Taken is Odoo's own bulk lead time in calendar days, counted ` +
