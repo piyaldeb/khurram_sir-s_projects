@@ -20,6 +20,12 @@
  * classification is read rather than guessed. An order whose lines disagree is
  * decided by the slider carrying the most quantity, and says that it was mixed.
  *
+ * H&M writes a policy rather than a day count, and its regular-order figure —
+ * close by twelve working days — is resolved to fourteen calendar days at this
+ * plant's six-day week. Every row so derived carries a `basis` saying so, and
+ * the page marks it, because a worked-out figure sitting beside read ones
+ * should never pass for one.
+ *
  * WHAT THE LEAD TIME IS
  * ---------------------
  * Odoo's own bulk figure, from the PPC report the Lead time page already runs —
@@ -36,11 +42,15 @@ export interface BuyerExpectation {
   standardDays: number | null;
   nonStandardDays: number | null;
   note?: string;
+  /** Set where the figure was worked out rather than read off the sheet. */
+  basis?: string;
 }
 
 export interface EddSource {
   source: string;
   company: string;
+  /** Working days convert to calendar days at this many days a week. */
+  workingWeek: number;
   note: string;
   buyers: BuyerExpectation[];
   /** Zipper type -> the sliders that count as standard for it. */
@@ -108,6 +118,8 @@ export interface EddRow {
   onTime: boolean | null;
   /** Set where the buyer wrote a sentence instead of a number. */
   note: string | null;
+  /** Set where the expected figure was derived rather than read. */
+  basis: string | null;
   /** True when the buyer is not in the workbook at all. */
   unknownBuyer: boolean;
 }
@@ -234,6 +246,7 @@ export async function eddReport(fy: number): Promise<EddReport> {
       gap,
       onTime: gap === null ? null : gap <= 0,
       note: expectation?.note ?? null,
+      basis: expectation?.basis ?? null,
       unknownBuyer: !expectation,
     };
   });

@@ -1,6 +1,7 @@
 {
   "source": "Buyer wise EDD (2 July'26).xlsx",
   "company": "Zipper",
+  "workingWeek": 6,
   "note": "Buyer expectations are hand-kept in the workbook and have no Odoo model. Standard sliders decide which of a buyer's two figures an order is judged against.",
   "buyers": [
     {
@@ -475,9 +476,10 @@
     },
     {
       "buyer": "H&M",
-      "standardDays": null,
-      "nonStandardDays": null,
-      "note": "Urgent/Speed orders: Partial start from 5 w/d and close by 8 w/days Regular orders: Partial start from 8 w/d and close by 12 w/days"
+      "standardDays": 14,
+      "nonStandardDays": 14,
+      "note": "Urgent/Speed orders: Partial start from 5 w/d and close by 8 w/days Regular orders: Partial start from 8 w/d and close by 12 w/days",
+      "basis": "Regular orders: close by 12 working days — 12 working days is 14 calendar days at a 6-day week"
     },
     {
       "buyer": "HERVIS",

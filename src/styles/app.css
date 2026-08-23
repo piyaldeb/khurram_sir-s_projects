@@ -4598,3 +4598,10 @@ table.edd-orders td.mono {
   text-transform: uppercase;
   cursor: help;
 }
+
+/* A figure worked out from a policy, not read off the sheet. Marked, because
+   a derived number beside read ones should never pass for one. */
+.edd-policy.derived {
+  background: var(--accent-wash);
+  color: var(--accent);
+}

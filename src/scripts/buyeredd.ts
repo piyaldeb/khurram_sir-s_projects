@@ -35,6 +35,7 @@ interface EddRow {
   gap: number | null;
   onTime: boolean | null;
   note: string | null;
+  basis: string | null;
   unknownBuyer: boolean;
 }
 
@@ -73,10 +74,13 @@ if (root) {
     trend: $<HTMLElement>('#edd-trend'),
     trendNote: $<HTMLElement>('#edd-trend-note'),
     fySeg: $<HTMLElement>('#edd-fy'),
+    monthPick: $<HTMLSelectElement>('#edd-month'),
   };
 
   const state = {
     fy: 0,
+    /** A month inside the chosen year, or '' for all of them. */
+    month: '',
     dimension: 'buyer' as DimKey,
     /** 'all' | 'late' | 'ontime' | 'pending' */
     only: 'all',
@@ -102,6 +106,12 @@ if (root) {
     new Date(`${iso}-01T00:00:00Z`).toLocaleDateString('en-GB', {
       month: 'short',
       year: '2-digit',
+      timeZone: 'UTC',
+    });
+  const monthLong = (iso: string) =>
+    new Date(`${iso}-01T00:00:00Z`).toLocaleDateString('en-GB', {
+      month: 'long',
+      year: 'numeric',
       timeZone: 'UTC',
     });
   const day = (iso: string) =>
@@ -155,6 +165,8 @@ if (root) {
     name: string;
     /** What the workbook wrote where a number was expected. */
     note: string | null;
+    /** How the expectation was worked out, where it was not simply read. */
+    basis: string | null;
     count: number;
     /** Orders the workbook could judge. */
     judged: number;
@@ -189,8 +201,28 @@ if (root) {
     perMonth: { late: number; onTime: number }[];
   }
 
+  /**
+   * The months the loaded year covers, oldest first, before any narrowing.
+   *
+   * Taken from the orders rather than generated from the year, so the picker
+   * only ever offers months that actually carry orders — and picking FY 26-27
+   * offers that year's months and nothing else.
+   */
+  function yearMonths(r: EddReport) {
+    return [...new Set(r.rows.map((x) => x.date.slice(0, 7)))].sort();
+  }
+
+  /** The month the sheet is narrowed to, if it is still inside the year. */
+  function pickedMonth(r: EddReport) {
+    if (!state.month) return null;
+    return yearMonths(r).includes(state.month) ? state.month : null;
+  }
+
   function shape(r: EddReport): Shaped {
+    const month = pickedMonth(r);
+
     const filtered = r.rows.filter((row) => {
+      if (month && row.date.slice(0, 7) !== month) return false;
       if (state.only === 'late') return row.onTime === false;
       if (state.only === 'ontime') return row.onTime === true;
       if (state.only === 'pending') return row.pending;
@@ -214,6 +246,7 @@ if (root) {
         row = {
           name: key,
           note: null,
+          basis: null,
           count: 0,
           judged: 0,
           onTime: 0,
@@ -233,6 +266,7 @@ if (root) {
       row.members.push(x);
       row.actual += x.actual;
       if (!row.note && x.note) row.note = x.note;
+      if (!row.basis && x.basis) row.basis = x.basis;
       if (x.pending) row.pending += 1;
       if (x.gap !== null && x.expected !== null) {
         row.judged += 1;
@@ -461,8 +495,10 @@ if (root) {
         )
       : row.members;
 
+    // Every order, not a top slice: the point of opening a row is to see what
+    // it is made of. The table sits in its own scroll box, so a buyer with a
+    // thousand OAs costs height inside that box rather than down the page.
     const body = shown
-      .slice(0, 60)
       .map(
         (x) => `<tr>
           <td class="text mono">${esc(x.order ?? x.no)}</td>
@@ -522,11 +558,11 @@ if (root) {
             <tbody>${body}</tbody>
           </table>
         </div>
-        ${
-          shown.length > 60
-            ? `<p class="hint">Showing the 60 worst of ${qty(shown.length)} — narrow it with the search.</p>`
-            : ''
-        }
+        <p class="hint">${
+          query
+            ? `${qty(shown.length)} of ${qty(row.members.length)} orders match the search`
+            : `all ${qty(shown.length)} orders, worst gap first`
+        }</p>
       </div>
     </td></tr>`;
   }
@@ -574,6 +610,12 @@ if (root) {
                 ? `<span class="edd-policy" title="${esc(
                     row.note,
                   )}">policy</span>`
+                : ''
+            }${
+              row.basis
+                ? `<span class="edd-policy derived" title="${esc(
+                    row.basis,
+                  )}">derived</span>`
                 : ''
             }${
               row.judged === 0 && row.count
@@ -643,8 +685,8 @@ if (root) {
             .join(', ')}${missing > 8 ? ', …' : ''}. `
         : '') +
       'A buyer marked "policy" wrote a sentence rather than a day count — hover it to read what ' +
-      'they actually asked for. Those orders still carry their real lead time; only the ' +
-      'comparison is missing.';
+      'they actually asked for. "Derived" means that sentence was turned into a figure: hover it ' +
+      'to see how — working days convert at a six-day week.';
   }
 
   /* ---------------------------------------------------------------- render */
@@ -659,6 +701,19 @@ if (root) {
           }">${esc(fyLabel(fy))}</button>`,
       )
       .join('');
+
+    const months = yearMonths(r);
+    const month = pickedMonth(r);
+    el.monthPick.innerHTML =
+      `<option value="">Every month</option>` +
+      months
+        .map(
+          (m) =>
+            `<option value="${m}"${m === month ? ' selected' : ''}>${esc(monthLong(m))}</option>`,
+        )
+        .join('');
+    el.monthPick.classList.toggle('picked', !!month);
+    el.monthPick.disabled = months.length < 2;
   }
 
   function render() {
@@ -730,8 +785,15 @@ if (root) {
     const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-fy]');
     if (!btn || Number(btn.dataset.fy) === state.fy) return;
     state.fy = Number(btn.dataset.fy);
+    state.month = '';
     state.open = null;
     void load();
+  });
+
+  el.monthPick.addEventListener('change', () => {
+    state.month = el.monthPick.value;
+    state.open = null;
+    render();
   });
 
   function exportCsv() {
