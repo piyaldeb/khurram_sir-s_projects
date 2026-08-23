@@ -4605,3 +4605,12 @@ table.edd-orders td.mono {
   background: var(--accent-wash);
   color: var(--accent);
 }
+
+/* A page showing its last good copy because Odoo would not answer. Marked
+   rather than hidden: the figures are real, they are just from earlier. */
+.is-stale {
+  color: var(--warn, #9a6b00);
+}
+.is-stale::before {
+  content: '⚠ ';
+}

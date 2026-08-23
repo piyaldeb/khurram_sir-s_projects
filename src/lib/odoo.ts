@@ -30,12 +30,48 @@ export interface OdooSession {
 
 export class OdooError extends Error {
   data: unknown;
-  constructor(message: string, data?: unknown) {
+  /**
+   * A hiccup rather than a refusal: a gateway that dropped the request, a
+   * server too busy to take it, a connection that never landed. Worth trying
+   * again. A denied access or a bad domain is not.
+   */
+  transient: boolean;
+  constructor(message: string, data?: unknown, transient = false) {
     super(message);
     this.name = 'OdooError';
     this.data = data;
+    this.transient = transient;
   }
 }
+
+/** Statuses that mean "not now" rather than "no". */
+const TRANSIENT_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+/**
+ * Methods that only read, and so may be repeated safely.
+ *
+ * A dropped write is not retried: the request may well have been applied
+ * before the gateway gave up on the reply, and applying it twice is worse
+ * than failing once. Those surface, and the cache serves its last good copy.
+ */
+const READ_METHODS = new Set([
+  'read',
+  'read_group',
+  'search',
+  'search_count',
+  'search_read',
+  'web_search_read',
+  'fields_get',
+  'name_search',
+  'default_get',
+  'check_access_rights',
+  'get_views',
+]);
+
+/** Waits between attempts. Three retries, spread over about five seconds. */
+const RETRY_BACKOFF_MS = [400, 1200, 3000];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 
 export const config = {
@@ -82,6 +118,8 @@ async function httpFetch(url: string, init?: RequestInit): Promise<Response> {
       `Could not reach ${new URL(url).origin}${code}` +
         (detail && detail !== 'fetch failed' ? `: ${detail}` : '') +
         '. Check ODOO_URL, the network, and that the server is reachable.',
+      undefined,
+      true,
     );
   }
 }
@@ -240,7 +278,30 @@ function isSessionExpired(error: any): boolean {
   );
 }
 
+/**
+ * One RPC call, retried when the failure was a hiccup and the call was a read.
+ *
+ * Odoo returns a 502 under load often enough that a single attempt is not a
+ * fair test of whether the data is there. Three tries over about five seconds
+ * costs a slow request in the bad case and turns a failed page into a served
+ * one in the common case.
+ */
 async function rpc<T>(path: string, params: unknown, retry = true): Promise<T> {
+  const method = (params as { method?: unknown } | null)?.method;
+  const repeatable = typeof method === 'string' ? READ_METHODS.has(method) : false;
+
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await rpcOnce<T>(path, params, retry);
+    } catch (err) {
+      const transient = err instanceof OdooError && err.transient;
+      if (!transient || !repeatable || attempt >= RETRY_BACKOFF_MS.length) throw err;
+      await sleep(RETRY_BACKOFF_MS[attempt]);
+    }
+  }
+}
+
+async function rpcOnce<T>(path: string, params: unknown, retry = true): Promise<T> {
   const session = await getSession();
   const res = await httpFetch(`${config.url}${path}`, {
     method: 'POST',
@@ -252,14 +313,20 @@ async function rpc<T>(path: string, params: unknown, retry = true): Promise<T> {
     body: JSON.stringify({ id: Date.now() % 100000, jsonrpc: '2.0', method: 'call', params }),
   });
 
-  if (!res.ok) throw new OdooError(`Odoo returned HTTP ${res.status} for ${path}.`);
+  if (!res.ok) {
+    throw new OdooError(
+      `Odoo returned HTTP ${res.status} for ${path}.`,
+      undefined,
+      TRANSIENT_STATUS.has(res.status),
+    );
+  }
 
   const body: any = await res.json();
   if (body?.error) {
     if (retry && isSessionExpired(body.error)) {
       invalidateSession();
       await getSession(true);
-      return rpc<T>(path, params, false);
+      return rpcOnce<T>(path, params, false);
     }
     const err = body.error;
     throw new OdooError(err?.data?.message?.trim() || err?.message || 'Odoo RPC error', err?.data);

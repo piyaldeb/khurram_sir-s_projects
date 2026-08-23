@@ -96,6 +96,8 @@ export const GET: APIRoute = async ({ url }) => {
       from: data.from,
       to: data.to,
       builtAt: data.builtAt,
+      stale: data.stale ?? false,
+      staleError: data.staleError ?? null,
       holidays: data.holidays.length,
       fiscalYears: availableFys().map((y) => ({ fy: y, label: fyLabel(y) })),
       totals,

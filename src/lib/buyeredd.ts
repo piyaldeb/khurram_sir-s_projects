@@ -134,6 +134,9 @@ export interface EddReport {
   missingBuyers: string[];
   source: string;
   builtAt: string;
+  /** True when the lead times came from cache because Odoo was unreachable. */
+  stale: boolean;
+  staleError: string | null;
 }
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -259,6 +262,10 @@ export async function eddReport(fy: number): Promise<EddReport> {
     rows,
     missingBuyers: [...missing].sort(),
     source: eddSource.source,
-    builtAt: new Date().toISOString(),
+    // The lead times are the expensive half and the half that can be stale, so
+    // the report is dated by them rather than by the moment it was assembled.
+    builtAt: data.builtAt,
+    stale: data.stale ?? false,
+    staleError: data.staleError ?? null,
   };
 }

@@ -30,6 +30,7 @@
  *   - The wizard reports on ONE company at a time — passing both ids returns
  *     the first, not the union — so a combined view is two builds merged here.
  */
+import { cached, odooStamp } from './cache';
 import { callButton, callKw, fetchBinary, getSession, buildContext } from './odoo';
 import { loadWorkbook } from './xlsx';
 
@@ -181,6 +182,10 @@ export interface LeadFyData {
   dataset: Dataset;
   from: string;
   to: string;
+  /** True when Odoo could not be reached and this is the last good copy. */
+  stale?: boolean;
+  /** Why it is stale, when it is. */
+  staleError?: string | null;
   builtAt: string;
   holidays: string[];
   rows: LeadRow[];
@@ -189,49 +194,60 @@ export interface LeadFyData {
 // -------------------------------------------------------------------- cache
 
 /**
- * A fiscal year is one ~20s Odoo report build over ~22,000 rows, and the closed
- * part of it never changes. Holding the parsed year keeps the page instant
- * after the first visit; the year in progress ages out so today's samples
- * appear.
+ * A fiscal year is one ~20s Odoo report build over several thousand rows, and
+ * the closed part of it never changes. The year in progress ages out quickly so
+ * today's orders appear; a finished year is trusted for half a day.
  */
 const CLOSED_TTL_MS = 12 * 60 * 60 * 1000;
 const OPEN_TTL_MS = Number(process.env.SAMPLE_CACHE_MS || 15 * 60 * 1000);
 
-const cache = new Map<string, { at: number; data: LeadFyData }>();
-const inFlight = new Map<string, Promise<LeadFyData>>();
-
 const cacheKey = (fy: number, dataset: Dataset, company: CompanyKey) =>
-  `${fy}|${dataset}|${company}`;
+  `lead-${fy}-${dataset}-${company}`;
 
-export function invalidateLeadTimes() {
-  cache.clear();
+/**
+ * Whether Odoo has anything new for this year, asked cheaply.
+ *
+ * The report is built from sales orders, so the count and latest edit of the
+ * orders in the window answer it. When they have not moved, a cache entry past
+ * its age is simply trusted again rather than rebuilt - which is most of the
+ * time, because most of what this page reports is finished months.
+ */
+function stampFor(fy: number, company: CompanyKey) {
+  const { from, to } = fyWindow(fy);
+  const id = COMPANIES.find((c) => c.key === company)!.id;
+  return () =>
+    odooStamp('sale.order', [
+      ['date_order', '>=', `${from} 00:00:00`],
+      ['date_order', '<=', `${to} 23:59:59`],
+      ['company_id', '=', id],
+    ]);
 }
 
-/** One company's slice of one dataset for one year. */
-async function getSlice(
-  fy: number,
-  dataset: Dataset,
-  company: CompanyKey,
-  force = false,
-): Promise<LeadFyData> {
-  const key = cacheKey(fy, dataset, company);
-  const ttl = fy === fyOf(todayIso()) ? OPEN_TTL_MS : CLOSED_TTL_MS;
+export function invalidateLeadTimes() {
+  // Nothing to clear: the cache is the database now, and a caller who wants a
+  // rebuild passes force.
+}
 
-  const hit = cache.get(key);
-  if (!force && hit && Date.now() - hit.at < ttl) return hit.data;
-
-  const running = inFlight.get(key);
-  if (!force && running) return running;
-
-  const job = buildSlice(fy, dataset, company)
-    .then((data) => {
-      cache.set(key, { at: Date.now(), data });
-      return data;
-    })
-    .finally(() => inFlight.delete(key));
-
-  inFlight.set(key, job);
-  return job;
+/**
+ * One company's slice of one dataset for one year.
+ *
+ * Held in the cache database rather than in memory. The process this runs in
+ * is replaced often - a redeploy, a cold start, a serverless instance that has
+ * been idle - and an in-memory year meant paying the twenty seconds again
+ * every time, which is where most of the "Odoo error" pages came from: the
+ * report was being rebuilt far more often than it needed to be, and Odoo
+ * refuses under that load.
+ *
+ * When the rebuild does fail, the previous copy is served and marked, because
+ * yesterday's finished months are still yesterday's finished months.
+ */
+function getSlice(fy: number, dataset: Dataset, company: CompanyKey, force = false) {
+  return cached<LeadFyData>(cacheKey(fy, dataset, company), 'leadtime', {
+    ttlMs: fy === fyOf(todayIso()) ? OPEN_TTL_MS : CLOSED_TTL_MS,
+    stamp: stampFor(fy, company),
+    force,
+    build: () => buildSlice(fy, dataset, company),
+  });
 }
 
 /**
@@ -246,8 +262,13 @@ export async function getLeadFy(
   companies: CompanyKey[],
   force = false,
 ): Promise<LeadFyData> {
-  const slices = await Promise.all(companies.map((c) => getSlice(fy, dataset, c, force)));
+  const held = await Promise.all(companies.map((c) => getSlice(fy, dataset, c, force)));
+  const slices = held.map((h) => h.value);
   const first = slices[0];
+
+  // A year is only as fresh as its least fresh company: if one of the two came
+  // from a failed rebuild, the whole year says so rather than the half of it.
+  const stale = held.some((h) => h.stale);
 
   return {
     fy,
@@ -255,7 +276,9 @@ export async function getLeadFy(
     dataset,
     from: first?.from ?? fyWindow(fy).from,
     to: first?.to ?? fyWindow(fy).to,
-    builtAt: slices.map((s) => s.builtAt).sort().at(-1) ?? new Date().toISOString(),
+    builtAt: held.map((h) => h.builtAt).sort().at(0) ?? new Date().toISOString(),
+    stale,
+    staleError: stale ? (held.find((h) => h.error)?.error ?? null) : null,
     holidays: [...new Set(slices.flatMap((s) => s.holidays))].sort(),
     rows: slices.flatMap((s) => s.rows),
   };

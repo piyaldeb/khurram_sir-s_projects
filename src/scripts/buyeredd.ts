@@ -47,6 +47,10 @@ interface EddReport {
   rows: EddRow[];
   missingBuyers: string[];
   source: string;
+  builtAt: string;
+  /** True when Odoo would not answer and the lead times are the last good copy. */
+  stale?: boolean;
+  staleError?: string | null;
   fiscalYears: number[];
 }
 
@@ -674,7 +678,18 @@ if (root) {
 
     const r = state.report;
     const missing = r?.missingBuyers.length ?? 0;
+    el.note.classList.toggle('is-stale', !!r?.stale);
     el.note.textContent =
+      (r?.stale
+        ? `Odoo was not answering, so these lead times are the last good copy, read ${new Date(
+            r.builtAt,
+          ).toLocaleString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}. The figures are real; they are true of that moment rather than this one. `
+        : '') +
       `Zipper bulk orders only — the workbook's expectations are written for zipper, and sample ` +
       `and other companies are not judged against them. ` +
       `Expected days come from ${r?.source ?? 'the EDD workbook'}; a standard item gets the ` +

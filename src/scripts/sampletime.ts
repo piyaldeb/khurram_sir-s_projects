@@ -79,6 +79,8 @@ interface Result {
   from: string;
   to: string;
   builtAt: string;
+  stale?: boolean;
+  staleError?: string | null;
   holidays: number;
   totals: {
     rows: number;
@@ -318,6 +320,16 @@ if (root?.dataset.odoo) {
         ? 'calendar days, Odoo deducts no holidays from bulk'
         : `${r.holidays} holidays deducted`) +
       ` · read ${built.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+
+    // The figures are real either way; what changes is which moment they are
+    // true of, and that is worth saying plainly rather than hiding.
+    el.classList.toggle('is-stale', !!r.stale);
+    if (r.stale) {
+      el.textContent += ' — Odoo is not answering, so this is the last good copy';
+      el.title = r.staleError ?? '';
+    } else {
+      el.removeAttribute('title');
+    }
   }
 
   /**

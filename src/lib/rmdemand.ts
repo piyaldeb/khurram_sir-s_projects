@@ -38,6 +38,7 @@
  * one. Odoo's own `rm.demand.availability.dashboard` would supply it, and this
  * login is denied access to that model.
  */
+import { cached, odooStampAll } from './cache';
 import { buildContext, callKw, getSession } from './odoo';
 import formula from '../data/rm-demand-formula.json';
 
@@ -252,6 +253,9 @@ export interface DemandReport {
   unmapped: string[];
   unmatched: string[];
   fetchedAt: string;
+  /** True when Odoo would not answer and this is the last good copy. */
+  stale?: boolean;
+  staleError?: string | null;
   error?: string;
 }
 
@@ -330,7 +334,48 @@ const cellKey = (group: string | null, category: string) => `${group ?? '?'}|${c
 
 /* ------------------------------------------------------------------ report */
 
+/**
+ * Whether anything behind the demand plan has moved.
+ *
+ * The four models the report actually depends on for its figures: the forecast
+ * it is built from, the stock ledger, goods in transit and the slider table.
+ * A change in any of them should be picked up; a quiet week should cost one
+ * cheap query rather than a full rebuild.
+ */
+const demandStamp = () =>
+  odooStampAll([
+    { model: FORECAST_MODEL, domain: [['company_id', '=', ZIPPER]] },
+    { model: LEDGER_MODEL },
+    { model: TRANSIT_MODEL },
+    { model: SLIDER_MODEL },
+  ]);
+
+/**
+ * The demand plan for a month, held in the cache database.
+ *
+ * The report reads seven models and is the slowest page on the site, so a
+ * failed rebuild used to leave nothing on screen. Now the previous copy stands
+ * in, marked, until Odoo answers again.
+ */
 export async function demandReport(wanted?: string): Promise<DemandReport> {
+  const held = await cached<DemandReport>(`rmdemand-${wanted ?? 'latest'}`, 'rmdemand', {
+    // The latest month is still filling, so it is re-asked often; a named month
+    // behind it only changes if someone edits history.
+    ttlMs: wanted ? 6 * 60 * 60 * 1000 : 15 * 60 * 1000,
+    stamp: demandStamp,
+    build: () => buildDemandReport(wanted),
+  });
+
+  return {
+    ...held.value,
+    stale: held.stale,
+    staleError: held.error,
+    // Dated by when the figures were read, not by when they were handed over.
+    fetchedAt: held.builtAt,
+  };
+}
+
+async function buildDemandReport(wanted?: string): Promise<DemandReport> {
   const context = buildContext(await getSession());
 
   // Which months the forecast covers. The page opens on the latest, which is
