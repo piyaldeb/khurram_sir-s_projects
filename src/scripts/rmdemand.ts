@@ -81,6 +81,8 @@ interface LiveCategory {
 interface DemandReport {
   month: string;
   months: string[];
+  projected: boolean;
+  stockAsOf: string;
   company: string;
   source: string;
   demand: CategoryDemand[];
@@ -367,11 +369,27 @@ if (root) {
       </div>`;
     };
 
+    /*
+     * A month the ledger has not reached says so plainly. Its requirement is
+     * real and its consumption is nothing, and without that sentence the two
+     * read as a collapse rather than as a month that has not happened.
+     */
     const head = `<div class="rail-head">
-      <p class="eyebrow">${esc(monthLong(r.month))} · ${esc(r.company)}</p>
-      <h2 class="rail-title">Required against consumed</h2>
-      <p class="rail-sub">The month's requirement worked out from the demand and the rate, against
-      what the ledger says was actually issued — and what is still on the water behind it.</p>
+      <p class="eyebrow">${esc(monthLong(r.month))} · ${esc(r.company)}${
+        r.projected ? ' · <span class="rmd-ahead">not started</span>' : ''
+      }</p>
+      <h2 class="rail-title">${
+        r.projected ? 'Required against what is coming' : 'Required against consumed'
+      }</h2>
+      <p class="rail-sub">${
+        r.projected
+          ? `The requirement is real — it comes from the forecast for this month. Nothing has been
+             consumed yet, so stock is the position at ${esc(
+               monthLong(r.stockAsOf),
+             )} and GIT counts only what is planned in-house by the end of the month.`
+          : `The month's requirement worked out from the demand and the rate, against what the
+             ledger says was actually issued — and what is still on the water behind it.`
+      }</p>
     </div>`;
 
     const totals = railBlock(
@@ -710,7 +728,9 @@ if (root) {
           <th class="sticky-col"></th>
           ${isMaterial ? '<th></th>' : ''}
           <th class="group-head">Ordered · USD, pcs beneath</th>
-          <th class="group-head" colspan="3">Material this month · USD, qty beneath</th>
+          <th class="group-head" colspan="3">${
+            state.report?.projected ? 'Material needed' : 'Material this month'
+          } · USD, qty beneath</th>
           <th class="group-head" colspan="5">What is available · USD, qty beneath</th>
         </tr>
         <tr class="sub-row">
@@ -792,6 +812,14 @@ if (root) {
       );
     }
     if (r.error) gaps.push(`Odoo: ${r.error}`);
+
+    if (r.projected) {
+      gaps.push(
+        `${monthLong(r.month)} has not started: the requirement is the forecast, stock is the ` +
+          `position at ${monthLong(r.stockAsOf)}, and GIT is only what is planned in-house by ` +
+          `the end of the month. Consumption is nothing because nothing has happened yet.`,
+      );
+    }
 
     el.note.textContent =
       gaps.join(' ') ||

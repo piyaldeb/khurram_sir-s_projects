@@ -4228,3 +4228,15 @@ table.rmd-ship td.mono {
 .rmd-plus {
   color: var(--ink-muted);
 }
+
+/* A month the ledger has not reached is labelled, not silently zeroed. */
+.rmd-ahead {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--warning, var(--accent)) 16%, transparent);
+  color: var(--ink-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}

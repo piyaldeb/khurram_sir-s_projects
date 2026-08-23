@@ -229,6 +229,17 @@ export interface DemandReport {
   month: string;
   /** Every month a forecast exists for, so the page can move between them. */
   months: string[];
+  /**
+   * True when the ledger has not reached this month yet.
+   *
+   * The forecast runs months ahead of the actuals, so a future month has a real
+   * requirement and no consumption at all. Stock and GIT then answer a
+   * different question — not "what did this month hold" but "what will be there
+   * by the time it arrives" — and the page has to say which it is showing.
+   */
+  projected: boolean;
+  /** The month the stock position is actually read from. */
+  stockAsOf: string;
   company: string;
   source: string;
   demand: CategoryDemand[];
@@ -343,6 +354,8 @@ export async function demandReport(wanted?: string): Promise<DemandReport> {
   const report: DemandReport = {
     month,
     months,
+    projected: false,
+    stockAsOf: month,
     company: demandFormula.company,
     source: demandFormula.source,
     demand: [],
@@ -358,7 +371,32 @@ export async function demandReport(wanted?: string): Promise<DemandReport> {
     return report;
   }
 
-  const [from, to] = monthBounds(month);
+  /*
+   * A future month has no snapshot of its own. Its stock position is the last
+   * one that exists, and its GIT is everything still on the water that is
+   * planned to land by the end of it — which is the question that month
+   * actually poses: will there be enough by then.
+   */
+  const latestLedger = await callKw<any[]>(LEDGER_MODEL, 'read_group', {
+    args: [[['company_id', '=', ZIPPER]], ['id'], ['month:month']],
+    kwargs: { context, lazy: false, limit: 0 },
+  })
+    .then((rows) =>
+      rows
+        .map((r) => String(r.__range?.['month:month']?.from ?? '').slice(0, 7))
+        .filter(Boolean)
+        .sort()
+        .at(-1) ?? month,
+    )
+    .catch(() => month);
+
+  const projected = month > latestLedger;
+  report.projected = projected;
+  report.stockAsOf = projected ? latestLedger : month;
+
+  const [from, to] = monthBounds(report.stockAsOf);
+  /** GIT and in-house are asked of the month on screen, not the stock month. */
+  const [, horizon] = monthBounds(month);
   const grid = new Map<string, Cell>();
   const byCategory = new Map<string, LiveCategory>();
   const rowUnit = new Map<string, string>();
@@ -392,7 +430,16 @@ export async function demandReport(wanted?: string): Promise<DemandReport> {
       }),
       callKw<any[]>(TRANSIT_MODEL, 'read_group', {
         args: [
-          [['state', 'in', IN_TRANSIT], ['transit_id.company_id', '=', ZIPPER]],
+          [
+            ['state', 'in', IN_TRANSIT],
+            ['transit_id.company_id', '=', ZIPPER],
+            // On a month that has already happened, GIT is simply what is on
+            // the water. On one that has not, only what is planned to land by
+            // the end of it can count towards covering it.
+            ...(projected
+              ? ['|', ['transit_id.ih_plan', '=', false], ['transit_id.ih_plan', '<', horizon]]
+              : []),
+          ],
           ['qty_in_transit', 'subtotal'],
           ['item_category', 'product_id'],
         ],
@@ -525,6 +572,24 @@ export async function demandReport(wanted?: string): Promise<DemandReport> {
 
     // A category can carry a stray row in another unit; the one that moved the
     // most speaks for it.
+    /*
+     * The stock month lends its POSITION to a projected month, never its
+     * flows. What August consumed is a fact about August; carrying it into
+     * September would invent a consumption that has not happened and make the
+     * deviation column read as if the month were already under way.
+     */
+    if (projected) {
+      for (const cell of grid.values()) {
+        cell.consumption = 0;
+        cell.consumptionValue = 0;
+        cell.opening = 0;
+      }
+      for (const roll of byCategory.values()) {
+        roll.consumption = 0;
+        roll.consumptionValue = 0;
+      }
+    }
+
     const best = new Map<string, number>();
     for (const row of units) {
       const cat = nameOf(row.item_category) || '(uncategorised)';
