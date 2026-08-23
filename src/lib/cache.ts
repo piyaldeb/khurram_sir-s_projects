@@ -96,8 +96,12 @@ export interface Cached<T> {
   /** Why it is stale, when it is. */
   error: string | null;
   /** How the answer was arrived at, for the page to say so honestly. */
-  via: 'fresh' | 'cache' | 'revalidated' | 'stale';
+  via: 'fresh' | 'cache' | 'revalidated' | 'stale' | 'refreshing';
 }
+
+/** Whether a build and a moment fall on the same calendar day, in UTC. */
+const sameDay = (iso: string, now: number) =>
+  new Date(iso).toISOString().slice(0, 10) === new Date(now).toISOString().slice(0, 10);
 
 const isEnvelope = <T>(doc: unknown): doc is Envelope<T> =>
   !!doc && typeof doc === 'object' && (doc as Envelope<T>).v === 1;
@@ -151,10 +155,45 @@ export interface CachedOptions<T> {
   stamp?: () => Promise<string | null>;
   /** Rebuild whatever the cache says. */
   force?: boolean;
+  /**
+   * Hand back the expired copy at once and refresh behind the request.
+   *
+   * Nobody waits for a rebuild they did not cause. Bounded by `maxStaleMs` so
+   * a refresh that never lands - a serverless instance frozen after its
+   * response, say - cannot leave a page stale for ever.
+   */
+  staleWhileRevalidate?: boolean;
+  /** How old a copy may get before someone has to wait for the rebuild. */
+  maxStaleMs?: number;
 }
 
 /** In-flight builds, so ten simultaneous readers cost one build. */
 const running = new Map<string, Promise<unknown>>();
+
+/**
+ * A copy in this process, in front of the database.
+ *
+ * The database copy survives a restart, which is what it is for, but reading
+ * it still costs a round trip and parsing a few megabytes of JSON - about a
+ * second on the larger reports, paid on every single request. A process that
+ * has already read an entry keeps it.
+ *
+ * Small on purpose: these entries are megabytes each, and a serverless
+ * instance holding a dozen of them is a memory problem rather than a speed
+ * one. The oldest goes when the cap is reached.
+ */
+const MEMORY_LIMIT = 8;
+const memory = new Map<string, Envelope<unknown>>();
+
+function remember(key: string, env: Envelope<unknown>) {
+  memory.delete(key);
+  memory.set(key, env);
+  while (memory.size > MEMORY_LIMIT) {
+    const oldest = memory.keys().next().value;
+    if (oldest === undefined) break;
+    memory.delete(oldest);
+  }
+}
 
 /**
  * A value that survives a restart, a redeploy and an Odoo outage.
@@ -178,8 +217,28 @@ export async function cached<T>(
   tag: string,
   opts: CachedOptions<T>,
 ): Promise<Cached<T>> {
-  const stored = await readCache<unknown>(key, tag);
-  const held = isEnvelope<T>(stored) ? stored : null;
+  // The process's own copy first, the database second. Both hold the same
+  // envelope, so the age test below is the same either way.
+  let held = (memory.get(key) as Envelope<T> | undefined) ?? null;
+  if (held && !opts.force) {
+    const age = Date.now() - Date.parse(held.builtAt);
+    if (Number.isFinite(age) && age < opts.ttlMs) {
+      return {
+        value: held.value,
+        builtAt: held.builtAt,
+        ageMs: Math.max(0, age),
+        stale: false,
+        error: null,
+        via: 'cache',
+      };
+    }
+  }
+
+  if (!held) {
+    const stored = await readCache<unknown>(key, tag);
+    held = isEnvelope<T>(stored) ? stored : null;
+    if (held) remember(key, held);
+  }
 
   const shape = (env: Envelope<T>, via: Cached<T>['via'], error: string | null = null) => ({
     value: env.value,
@@ -194,15 +253,30 @@ export async function cached<T>(
     const age = Date.now() - Date.parse(held.builtAt);
     if (Number.isFinite(age) && age < opts.ttlMs) return shape(held, 'cache');
 
-    // Expired. Ask Odoo the cheap question before paying for the dear one.
-    if (opts.stamp && held.stamp) {
+    // Expired. Ask Odoo the cheap question before paying for the dear one —
+    // but only within the day it was built. Nearly every report here is
+    // reckoned against today: the lead-time window ends today, an order still
+    // open counts its days against today, the demand plan opens on the latest
+    // settled month. Odoo's stamp cannot see any of that. It answers "has a
+    // record changed", and the honest answer overnight is often no, which
+    // would let yesterday's report be waved through as current with every
+    // open order a day short. A day boundary is a rebuild, always.
+    if (opts.stamp && held.stamp && sameDay(held.builtAt, Date.now())) {
       const now = await opts.stamp();
       if (now && now === held.stamp) {
         const refreshed: Envelope<T> = { ...held, builtAt: new Date().toISOString() };
+        remember(key, refreshed);
         await writeCache(key, refreshed, tag);
         return shape(refreshed, 'revalidated');
       }
     }
+  }
+
+  // An expired copy, with a refresh already running for it: take the copy
+  // rather than queue behind the rebuild.
+  const refreshing = running.get(key) as Promise<Envelope<T>> | undefined;
+  if (held && refreshing && opts.staleWhileRevalidate && sameDay(held.builtAt, Date.now())) {
+    return shape(held, 'refreshing');
   }
 
   const job =
@@ -213,11 +287,29 @@ export async function cached<T>(
         opts.stamp ? opts.stamp() : Promise.resolve(null),
       ]);
       const env: Envelope<T> = { v: 1, value, builtAt: new Date().toISOString(), stamp };
+      remember(key, env);
       await writeCache(key, env, tag);
       return env;
     })();
 
   running.set(key, job);
+
+  // With a copy in hand and permission to serve it, the rebuild happens behind
+  // this response instead of in front of it. A copy older than the ceiling is
+  // not good enough to stand in, so that request waits like the first one did.
+  // Eight ages, and never less than a minute: a short TTL should not make the
+  // ceiling so tight that the copy is never allowed to stand in.
+  const ceiling = opts.maxStaleMs ?? Math.max(opts.ttlMs * 8, 60_000);
+  const ageOf = (env: Envelope<T>) => Date.now() - Date.parse(env.builtAt);
+  if (held && opts.staleWhileRevalidate && ageOf(held) < ceiling && sameDay(held.builtAt, Date.now())) {
+    job
+      .catch((err) => {
+        console.warn(`[${tag}] ${key}: background refresh failed: ${(err as Error).message}`);
+      })
+      .finally(() => running.delete(key));
+    return shape(held, 'refreshing');
+  }
+
   try {
     return shape(await job, 'fresh');
   } catch (err) {

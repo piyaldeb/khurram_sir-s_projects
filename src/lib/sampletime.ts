@@ -245,6 +245,13 @@ function getSlice(fy: number, dataset: Dataset, company: CompanyKey, force = fal
   return cached<LeadFyData>(cacheKey(fy, dataset, company), 'leadtime', {
     ttlMs: fy === fyOf(todayIso()) ? OPEN_TTL_MS : CLOSED_TTL_MS,
     stamp: stampFor(fy, company),
+    // A finished year cannot change, so an old copy of it is not an old
+    // answer and may stand in freely. The year in progress can and does
+    // change, and handing one reader the copy from an hour ago while the next
+    // gets the rebuild is exactly the wandering figures this is meant to
+    // avoid. That year waits for its rebuild — once every fifteen minutes,
+    // for one unlucky request.
+    staleWhileRevalidate: fy !== fyOf(todayIso()),
     force,
     build: () => buildSlice(fy, dataset, company),
   });

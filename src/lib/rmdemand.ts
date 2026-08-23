@@ -364,6 +364,8 @@ export async function demandReport(wanted?: string): Promise<DemandReport> {
     ttlMs: wanted ? 6 * 60 * 60 * 1000 : 15 * 60 * 1000,
     stamp: demandStamp,
     build: () => buildDemandReport(wanted),
+    // A named month behind the latest is settled; the latest is not.
+    staleWhileRevalidate: !!wanted,
   });
 
   return {

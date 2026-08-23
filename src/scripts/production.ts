@@ -53,6 +53,7 @@ interface BudgetSummary {
 }
 
 import { skeleton } from '../lib/skeleton';
+import { startWarming } from './warm';
 
 const root = document.querySelector<HTMLElement>('.production');
 
@@ -600,3 +601,8 @@ if (root) {
     go(root.dataset.date ?? yesterday());
   }
 }
+
+// This is the page a session starts on, so it is the page that gives the rest
+// of the site a head start. Runs only once a session, and only once this page
+// has finished its own work — see warm.ts.
+startWarming();

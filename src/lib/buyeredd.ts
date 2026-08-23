@@ -34,6 +34,7 @@
  * keeps growing, which is the honest reading: it is already that late.
  */
 import edd from '../data/buyer-edd.json';
+import { cached, odooStamp } from './cache';
 import { buildContext, callKw, getSession } from './odoo';
 import { getLeadFy, normaliseNo, type LeadRow } from './sampletime';
 
@@ -190,8 +191,39 @@ async function slidersFor(orders: string[]): Promise<Map<string, { slider: strin
   return out;
 }
 
-/** One fiscal year of bulk zipper orders, judged against what buyers expect. */
+/**
+ * One fiscal year of bulk zipper orders, judged against what buyers expect.
+ *
+ * Held in the cache database. The lead times behind it were already cached,
+ * but the slider join was not, and that is nine grouped reads over every order
+ * in the year - about ten seconds, paid again on every visit. The join only
+ * changes when an order line changes, so it is stamped on `sale.order.line`
+ * and rebuilt when that moves.
+ */
 export async function eddReport(fy: number): Promise<EddReport> {
+  const { from, to } = { from: `${fy}-04-01`, to: `${fy + 1}-03-31` };
+  const held = await cached<EddReport>(`edd-${fy}`, 'buyeredd', {
+    ttlMs: fy === currentFy() ? 15 * 60 * 1000 : 12 * 60 * 60 * 1000,
+    stamp: () =>
+      odooStamp('sale.order.line', [
+        ['order_id.date_order', '>=', `${from} 00:00:00`],
+        ['order_id.date_order', '<=', `${to} 23:59:59`],
+      ]),
+    build: () => buildEddReport(fy),
+    // As above: only a closed year may be served from an older copy.
+    staleWhileRevalidate: fy !== currentFy(),
+  });
+
+  return { ...held.value, stale: held.stale, staleError: held.error, builtAt: held.builtAt };
+}
+
+/** April to March; the year a date belongs to is the year its April started. */
+function currentFy() {
+  const now = new Date();
+  return now.getUTCMonth() + 1 >= 4 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+}
+
+async function buildEddReport(fy: number): Promise<EddReport> {
   // Zipper only: the workbook's expectations are for zipper, and the sheet
   // names itself so.
   const data = await getLeadFy(fy, 'bulk', ['zipper']);
