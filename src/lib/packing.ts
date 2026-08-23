@@ -11,14 +11,11 @@
  * a closed month never changes, so it is fetched exactly once; the current
  * month refreshes after a TTL. Raw lines are never stored.
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
 import { getSession, productionCompanies, type OdooCompany } from './odoo';
 import { generateReport } from './reports';
 import { parseWorkbook, type SheetCell } from './xlsx';
-import { cacheGetMany, cacheSet, supabaseConfig } from './supabase';
+import { readCacheMany, writeCache } from './cache';
 
-const CACHE_DIR = resolve(process.env.DATA_DIR || 'data', 'analytics');
 const FRESH_MINUTES = Number(process.env.ODOO_SYNC_FRESH_MINUTES || 15);
 
 /**
@@ -59,59 +56,6 @@ const cacheKey = (month: string, companyId: number) => {
   return `packing-${month}-c${companyId}`;
 };
 
-function cachePath(key: string): string {
-  return join(CACHE_DIR, `${key}.json`);
-}
-
-/**
- * Cache reads and writes go to Supabase when it is configured, and to disk
- * otherwise. Serverless has no writable filesystem, so on Vercel the Supabase
- * path is the only one that works.
- */
-async function readCacheMany(keys: string[]): Promise<Map<string, MonthPacking>> {
-  if (supabaseConfig.enabled) {
-    try {
-      return await cacheGetMany<MonthPacking>(keys);
-    } catch (err) {
-      // A missing or unreachable cache makes this slower, not broken.
-      warnCacheOnce((err as Error).message);
-      return new Map();
-    }
-  }
-
-  const out = new Map<string, MonthPacking>();
-  for (const key of keys) {
-    try {
-      out.set(key, JSON.parse(await readFile(cachePath(key), 'utf8')) as MonthPacking);
-    } catch {
-      /* not cached */
-    }
-  }
-  return out;
-}
-
-let cacheWarned = false;
-function warnCacheOnce(message: string) {
-  if (cacheWarned) return;
-  cacheWarned = true;
-  console.warn(`[packing] cache unavailable, falling back to refetching: ${message}`);
-}
-
-async function writeCache(entry: MonthPacking): Promise<void> {
-  const key = cacheKey(entry.month, entry.companyId);
-  if (supabaseConfig.enabled) {
-    try {
-      await cacheSet(key, entry);
-    } catch (err) {
-      warnCacheOnce((err as Error).message);
-    }
-    return;
-  }
-  const path = cachePath(key);
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, JSON.stringify(entry), 'utf8');
-}
-
 function isFresh(entry: MonthPacking): boolean {
   // A failed fetch is retried on the same schedule as the current month.
   if (entry.error) {
@@ -144,7 +88,7 @@ async function fetchMonth(month: string, company: OdooCompany): Promise<MonthPac
   // A month that has not started cannot have produced anything; asking Odoo
   // for it costs a full report build and always comes back empty.
   if (month > currentMonth()) {
-    await writeCache(entry);
+    await writeCache(cacheKey(entry.month, entry.companyId), entry, 'packing');
     return entry;
   }
 
@@ -198,7 +142,7 @@ async function fetchMonth(month: string, company: OdooCompany): Promise<MonthPac
     if (!/no data/i.test(message)) entry.error = message;
   }
 
-  await writeCache(entry);
+  await writeCache(cacheKey(entry.month, entry.companyId), entry, 'packing');
   return entry;
 }
 
@@ -221,7 +165,10 @@ export async function rangePacking(
   const companies = productionCompanies(session);
 
   const jobs = months.flatMap((month) => companies.map((company) => ({ month, company })));
-  const cached = await readCacheMany(jobs.map((j) => cacheKey(j.month, j.company.id)));
+  const cached = await readCacheMany<MonthPacking>(
+    jobs.map((j) => cacheKey(j.month, j.company.id)),
+    'packing',
+  );
 
   const have: MonthPacking[] = [];
   const missing: typeof jobs = [];

@@ -7,6 +7,7 @@ no export/import step, no copies of the data:
 |---|---|
 | **Reports** (`/`) | Runs any of the 36 `MRP Reports` wizard reports and renders the result as a searchable, sortable table with totals and CSV/Excel export. |
 | **Budget follow-up** (`/budget`) | `Monthly Budget vs Achievement`, live — as a month sheet, a fiscal year, or year-to-date, with charts. Targets come from the planning workbook; production is read from Odoo. |
+| **OA released** (`/oa-released`, under Sales) | Every bulk order marketing has released to production, by product and by company, from the first OA in April 2023. Open a product for its own month-by-month history, the codes and variants it ships under, and who buys it. |
 | **Production ABC** (`/analytics`) | Pareto analysis over the packing reports: which items, buyers and customers carry the value. |
 | **OT cost** (`/ot-cost`) | The `OT Cost` sheet, live — an OT month, a fiscal year, or year-to-date, split Manufacturing against Other Departments and measured against the OT plan and budget. |
 | **180+ stock** (`/ageing`) | The `180 plus days stock` workbook, live — raw material sat over 180 days, its month-by-month history, the usable/unusable split, and every lot in the band. |
@@ -659,6 +660,80 @@ figures are computed over everything the filters match, and only 200 rows travel
 covers customer, buyer, style, buying house, and SA or OA number — numbers match on their
 digits, so "42035", "SA042035" and "sa 42035" all find the same sample.
 
+## OA released
+
+`/oa-released`, reached from **Sales** in the top bar. The production report says what the
+plant made; this says what it has been told to make — the order book that leads it by weeks.
+
+An **OA** (Order Acknowledgement) is a bulk sales order, named `OA` plus its number.
+`released_status = released` is the moment marketing hands it to production. So the report
+is every `sale.order` matching:
+
+```
+name            =like  OA%
+released_status =      released
+```
+
+37,648 orders and 332,594 lines at the time of writing, $69.2M, back to `OA00401` on
+6 April 2023. Zipper carries 82.8% of it, Metal Trims 17.2%.
+
+### Which month an OA belongs to
+
+The **order's** `date_order`, not the line's creation date. Summing `price_subtotal` over the
+lines whose order falls in a month reproduces the order-level `amount_untaxed` exactly —
+July 2026 Zipper is $1,562,705 read either way, and 826 OAs both ways. Grouping by the line's
+own `create_date` instead drifts by a couple of percent, because a line added by a revision
+is created after the order it belongs to.
+
+`sale.order.line` cannot be grouped by a field on its order, so the month is a domain and the
+report walks month by month.
+
+### What counts as a "product"
+
+Odoo has no level between `COIL 3 ZIPPER CLOSE END` and the 21,623 variants that spell out
+every slider, shade and length. Neither end is the report:
+
+- **The variant** is too fine. Grouping all of history by `product_id` takes Odoo a minute and
+  returns 21,623 rows, most of them one order.
+- **`product_code`** on the line looks right — 1,151 codes, and it groups in under a second —
+  but it was only filled in from **September 2023**. April to August 2023 has none at all, so
+  it cannot carry the early months.
+
+What does hold for all of it is the variant's own name. Everything before the bracketed spec
+is the product family, so `product_family()` takes it:
+
+```
+COIL 3 ZIPPER CLOSE END (DTM, Slider C#3 DTM REVERSE TZP-794, ...)  ->  COIL 3 ZIPPER CLOSE END
+HIDDEN SNAP 100234813                                              ->  HIDDEN SNAP
+```
+
+That is 73 products in a recent month, 171 over the whole run, and it covers April 2023.
+The codes and the variants are not lost — they open underneath the row.
+
+Note that the daily production report labels the same things `M#4 CE`, `C#3 CE` and so on.
+Those come from Odoo's own `dpr` sheet, which names products its own way; the internal code
+in a product's breakdown (`M4ZDCE`, `C3ZCE`) is the bridge between the two.
+
+### Opening a product
+
+The month-by-month history is free — the page already holds every month, so the chart draws
+with no request. Only what the roll-up threw away is fetched, in four sub-second grouped
+reads: the internal codes, the top customers, the top variants, and the last OAs to carry it.
+Each is scoped by `product_id.name =like '<family>%'`.
+
+The variant list strips the spec every listed variant shares and prints it once above them,
+because within one product most of the spec is identical and eight variants printed in full
+are eight identical paragraphs. What is left is the token that actually differs — usually the
+size.
+
+### Cost and caching
+
+Grouping one month by product and company takes Odoo about six seconds. Each month's
+**aggregate** is cached under `oarel-<month>`, so a closed month is fetched exactly once and
+the month in progress ages out after fifteen minutes. A cold cache fills four months per
+request and the page asks again until nothing is pending — 41 months takes about two minutes,
+the same as Production ABC. Raw lines are never stored.
+
 ## Layout
 
 ```
@@ -681,6 +756,8 @@ src/
     otanalysis.ts  the OT Cost sheet's arithmetic and the reading that goes with it
     ageing.ts      180+ days stock: ageing snapshots, lots, the unusable split
     sampletime.ts  sample and bulk lead time, with the sales-module revisions
+    oarelease.ts   OA released: per-month product/company aggregates from sale.order
+    cache.ts       derived aggregates, in Supabase or on disk
     charts.ts      inline-SVG bar and line charts
     storage.ts     flat-file JSON storage
   pages/
@@ -689,6 +766,7 @@ src/
     ot-cost.astro  OT cost
     ageing.astro   180+ days stock
     sample-leadtime.astro  sample and bulk lead time
+    oa-released.astro      OA released by product and company
     api/report.ts     POST - run a report, return parsed JSON
     api/download.ts   GET  - stream the untouched xlsx
     api/lookup.ts     GET  - buyers, challans, work centres
@@ -699,6 +777,7 @@ src/
     api/ot-cost.ts    GET  - OT cost for a month, a fiscal year, or YTD
     api/ageing.ts     GET  - the 180+ report, or ?lots=YYYY-MM for one month's lots
     api/sample-leadtime.ts GET - lead time, filtered/aggregated/paged server-side
+    api/oa-released.ts     GET - every month of OA release, or ?product= for one product
   scripts/         client-side logic for each page
   styles/app.css   design tokens (light + dark), components, charts
 ```

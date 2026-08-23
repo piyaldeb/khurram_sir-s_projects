@@ -1,0 +1,80 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+---
+
+<Base title="OA released · Odoo" connected={!!session} connectionLabel={connectionLabel}>
+  <main class="main oa" data-odoo={session ? '1' : ''}>
+    <header class="page-head">
+      <div class="page-head-text">
+        <p class="eyebrow">Sales into production</p>
+        <h1>OA released</h1>
+        <p class="lede">
+          Every bulk order marketing has released to the floor, by product and by company —
+          all of it, back to the first OA in April 2023. Open a product for its own history.
+        </p>
+      </div>
+
+      <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Company" id="oa-company"></div>
+        <div class="segmented" role="tablist" aria-label="Period" id="oa-period"></div>
+      </div>
+    </header>
+
+    {
+      odooError && (
+        <div class="panel state error banner">
+          <h2>Odoo is not connected</h2>
+          <p>{odooError}</p>
+        </div>
+      )
+    }
+
+    <div class="panel state" id="oa-status">
+      <h2><span class="spinner"></span> Reading the order book</h2>
+      <p>
+        The first run groups every month of released OAs in Odoo and caches it — that takes a
+        couple of minutes. After that only the month in progress refreshes.
+      </p>
+    </div>
+
+    <div class="day-layout" id="oa-body" hidden>
+      <!-- The rail carries the judgment; the sheet carries every product. -->
+      <aside class="day-rail" id="oa-rail"></aside>
+
+      <section class="day-main">
+        <section class="panel card">
+          <div class="card-head">
+            <h2>Released, month by month</h2>
+            <span class="hint" id="oa-trend-note"></span>
+          </div>
+          <div class="chart-host" id="oa-trend"></div>
+        </section>
+
+        <div class="chips-bar panel" id="oa-chips" style="margin-top:16px"></div>
+
+        <div class="panel card day-card">
+          <div class="table-scroll" id="oa-grid" style="max-height:none"></div>
+        </div>
+        <p class="hint" id="oa-note"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="../scripts/oarelease.ts"></script>
+</Base>

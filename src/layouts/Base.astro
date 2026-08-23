@@ -9,6 +9,16 @@ interface Props {
 
 const { title, connected = false, connectionLabel = 'Not connected' } = Astro.props;
 const path = Astro.url.pathname;
+
+/**
+ * The Sales module. Reports that read the order book rather than the floor sit
+ * behind their own menu, so the top row stays the manufacturing reports and the
+ * sales ones can grow without pushing them off the side.
+ */
+const sales = [
+  { href: '/oa-released', label: 'OA released', hint: 'Bulk orders let go to the floor' },
+];
+const inSales = sales.some((item) => path.startsWith(item.href));
 ---
 
 <!doctype html>
@@ -33,6 +43,32 @@ const path = Astro.url.pathname;
         </div>
         <nav class="nav" aria-label="Sections" id="site-nav">
           <a href="/" class:list={['nav-link', { active: path === '/' }]}>Production report</a>
+          <div class="nav-group" data-nav-group>
+            <button
+              type="button"
+              class:list={['nav-link', 'nav-trigger', { active: inSales }]}
+              aria-expanded="false"
+              aria-haspopup="true"
+              aria-controls="nav-sales"
+            >
+              Sales
+              <span class="nav-caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="nav-menu" id="nav-sales" role="menu" aria-label="Sales">
+              {
+                sales.map((item) => (
+                  <a
+                    href={item.href}
+                    role="menuitem"
+                    class:list={['nav-menu-item', { active: path.startsWith(item.href) }]}
+                  >
+                    <strong>{item.label}</strong>
+                    <small>{item.hint}</small>
+                  </a>
+                ))
+              }
+            </div>
+          </div>
           <a href="/budget" class:list={['nav-link', { active: path.startsWith('/budget') }]}>
             Budget follow-up
           </a>
@@ -65,6 +101,38 @@ const path = Astro.url.pathname;
     </div>
 
     <script is:inline>
+      /*
+       * The Sales menu opens on hover in CSS. This adds the ways a pointer
+       * cannot: click and Enter for touch and keyboard, Escape to close, and a
+       * click anywhere else to dismiss. `data-open` only ever adds to what
+       * :hover and :focus-within already do.
+       */
+      document.querySelectorAll('[data-nav-group]').forEach((group) => {
+        const trigger = group.querySelector('.nav-trigger');
+        if (!trigger) return;
+
+        const setOpen = (open) => {
+          group.toggleAttribute('data-open', open);
+          trigger.setAttribute('aria-expanded', String(open));
+        };
+
+        trigger.addEventListener('click', (event) => {
+          event.preventDefault();
+          setOpen(!group.hasAttribute('data-open'));
+        });
+
+        group.addEventListener('keydown', (event) => {
+          if (event.key !== 'Escape') return;
+          setOpen(false);
+          trigger.focus();
+        });
+
+        // Hovering back out is the pointer's own dismissal; this catches taps.
+        document.addEventListener('click', (event) => {
+          if (!group.contains(event.target)) setOpen(false);
+        });
+      });
+
       // Light is the default, so the toggle only has to flip the explicit stamp.
       document.getElementById('theme-toggle')?.addEventListener('click', () => {
         const root = document.documentElement;
