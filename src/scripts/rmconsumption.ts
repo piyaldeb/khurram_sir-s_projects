@@ -743,7 +743,7 @@ if (root) {
             state.dimension === d.key
           }">${esc(d.label)}</button>`,
       ).join('') +
-      `<span class="chip" aria-hidden="true">${qty(s.rows.length)} rows</span>` +
+      `<span class="chip-count">${qty(s.rows.length)} rows</span>` +
       `<input class="chips-search" id="rm-search" type="search" placeholder="Search ${esc(
         dimension().noun,
       )}…" value="${esc(state.query)}" />` +

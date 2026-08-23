@@ -887,7 +887,7 @@ if (root) {
             }">${m === 'value' ? 'Value $' : 'Quantity'}</button>`,
         )
         .join('') +
-      `<span class="chip" aria-hidden="true">${qty(s.rows.length)} products</span>` +
+      `<span class="chip-count">${qty(s.rows.length)} products</span>` +
       `<input class="chips-search" id="oa-search" type="search" placeholder="Search products…" value="${esc(
         state.query,
       )}" />` +

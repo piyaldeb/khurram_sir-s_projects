@@ -4466,3 +4466,20 @@ table.rmd-ship td.mono {
   background: var(--surface-sunk);
   color: var(--ink-muted);
 }
+
+/*
+ * A count is a caption, not a control.
+ *
+ * It sat in the chips row wearing `.chip` — a bordered pill with a pointer
+ * cursor and a hover state, beside buttons that do something — so it read as a
+ * button that was broken. Same shape, no border, no hover, no cursor: it now
+ * looks like what it is.
+ */
+.chip-count {
+  padding: 4px 2px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: default;
+}

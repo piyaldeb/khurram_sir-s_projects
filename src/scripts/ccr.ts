@@ -542,7 +542,7 @@ if (root) {
             state.dimension === d.key
           }">${esc(d.label)}</button>`,
       ).join('') +
-      `<span class="chip" aria-hidden="true">${qty(s.total.count)} CCRs</span>` +
+      `<span class="chip-count">${qty(s.total.count)} CCRs</span>` +
       `<input class="chips-search" id="ccr-search" type="search" placeholder="Search complaints…" value="${esc(
         state.query,
       )}" />` +
