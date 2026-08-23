@@ -1,0 +1,77 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+---
+
+<Base title="CCR · Odoo" connected={!!session} connectionLabel={connectionLabel}>
+  <main class="main ccr" data-odoo={session ? '1' : ''}>
+    <header class="page-head">
+      <div class="page-head-text">
+        <p class="eyebrow">Quality</p>
+        <h1>Customer complaints</h1>
+        <p class="lede">
+          Every CCR raised against a delivery — how it was classified, where it has got to, and
+          what the customer actually said. Open a row to read them.
+        </p>
+      </div>
+
+      <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Company" id="ccr-company"></div>
+        <div class="segmented" role="tablist" aria-label="Period" id="ccr-period"></div>
+        <select class="oa-month-pick" id="ccr-month" aria-label="Month"></select>
+      </div>
+    </header>
+
+    {
+      odooError && (
+        <div class="panel state error banner">
+          <h2>Odoo is not connected</h2>
+          <p>{odooError}</p>
+        </div>
+      )
+    }
+
+    <div class="panel state" id="ccr-status">
+      <h2><span class="spinner"></span> Reading the complaints</h2>
+      <p>Every CCR Odoo holds, in one read — then cached.</p>
+    </div>
+
+    <div class="day-layout" id="ccr-body" hidden>
+      <aside class="day-rail" id="ccr-rail"></aside>
+
+      <section class="day-main">
+        <section class="panel card">
+          <div class="card-head">
+            <h2>Raised, month by month</h2>
+            <span class="hint" id="ccr-trend-note"></span>
+          </div>
+          <div class="chart-host" id="ccr-trend"></div>
+        </section>
+
+        <div class="chips-bar panel" id="ccr-chips" style="margin-top:16px"></div>
+
+        <div class="panel card day-card">
+          <div class="table-scroll" id="ccr-grid" style="max-height:none"></div>
+        </div>
+        <p class="hint" id="ccr-note"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="../scripts/ccr.ts"></script>
+</Base>

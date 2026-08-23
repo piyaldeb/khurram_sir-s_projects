@@ -29,9 +29,18 @@ const rm = [
   { href: '/ageing', label: '180+ stock', hint: 'Material sat over 180 days' },
 ];
 
+/**
+ * The Quality module. Complaints are neither a sales report nor a material
+ * one, and there will be more of them than CCR before long.
+ */
+const quality = [
+  { href: '/ccr', label: 'CCR', hint: 'Customer complaints, and where they stand' },
+];
+
 const groups = [
   { id: 'sales', label: 'Sales', items: sales },
   { id: 'rm', label: 'RM', items: rm },
+  { id: 'quality', label: 'Quality', items: quality },
 ];
 const activeGroup = (items: { href: string }[]) => items.some((i) => path.startsWith(i.href));
 ---

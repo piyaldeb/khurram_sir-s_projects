@@ -4240,3 +4240,136 @@ table.rmd-ship td.mono {
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
+
+/* ------------------------------------------------------------ CCR: complaints */
+
+/* The workflow states, as a small stacked reading in the rail. */
+.ccr-states {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 11px;
+}
+
+.ccr-state-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.ccr-state-row b {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.ccr-state-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The complaints themselves. A count says forty people complained about
+ * colour; only the text says what actually went wrong, so it gets room to be
+ * read rather than a truncated cell.
+ */
+.ccr-list {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ccr-item {
+  padding: 10px 12px;
+  border: 1px solid var(--grid);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.ccr-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 10px;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.ccr-ref {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.ccr-when {
+  font-variant-numeric: tabular-nums;
+}
+
+.ccr-who {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.ccr-age {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.ccr-comment {
+  margin: 7px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.ccr-item-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+/* Open, closed, and the third thing that is neither. */
+.ccr-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ccr-badge.open {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.ccr-badge.closed {
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+  color: var(--good);
+}
+
+.ccr-badge.notours {
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+}
+
+@media (max-width: 640px) {
+  .ccr-age {
+    margin-left: 0;
+  }
+
+  .ccr-state-row {
+    grid-template-columns: 78px minmax(0, 1fr) 30px;
+  }
+}
