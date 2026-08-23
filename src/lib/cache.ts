@@ -314,6 +314,19 @@ export async function cached<T>(
     return shape(await job, 'fresh');
   } catch (err) {
     const message = err instanceof OdooError ? err.message : (err as Error).message;
+
+    // Nothing in hand — but the first read may itself have failed, and the
+    // store warns and returns empty rather than throwing. Ask once more before
+    // giving up: a cache that blinked is a poor reason to show an error page
+    // when a perfectly good copy is sitting there.
+    if (!held) {
+      const retried = await readCache<unknown>(key, tag);
+      if (isEnvelope<T>(retried)) {
+        held = retried;
+        remember(key, retried);
+      }
+    }
+
     if (!held) throw err;
     console.warn(`[${tag}] ${key}: rebuild failed, serving the copy from ${held.builtAt}: ${message}`);
     return shape(held, 'stale', message);

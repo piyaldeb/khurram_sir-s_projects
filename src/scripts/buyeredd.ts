@@ -143,23 +143,48 @@ if (root) {
     el.chips.innerHTML = skeleton.chips(6);
     el.grid.innerHTML = skeleton.table(9, 10);
 
-    try {
-      const res = await fetch(`/api/buyer-edd${state.fy ? `?fy=${state.fy}` : ''}`, {
-        signal: controller.signal,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
-      state.report = data as EddReport;
-      state.fy = state.report.fy;
-      render();
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
-      el.body.hidden = true;
-      el.status.hidden = false;
-      el.status.classList.add('error');
-      el.status.innerHTML = `<h2>Could not build the year</h2><p style="font-family:var(--mono);font-size:12.5px">${esc(
-        (err as Error).message,
-      )}</p>`;
+    // Odoo drops a report under load often enough that one refusal is not a
+    // verdict. Two more goes, spaced out, before saying so — most of the
+    // failures people used to see cleared on their own within seconds.
+    const ATTEMPTS = 3;
+    const WAIT_MS = [2000, 5000];
+
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch(`/api/buyer-edd${state.fy ? `?fy=${state.fy}` : ''}`, {
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+        state.report = data as EddReport;
+        state.fy = state.report.fy;
+        render();
+        return;
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+
+        const last = attempt === ATTEMPTS - 1;
+        if (!last) {
+          el.status.hidden = false;
+          el.status.classList.remove('error');
+          el.status.innerHTML =
+            `<h2><span class="spinner"></span> Odoo did not answer — trying again</h2>` +
+            `<p>Attempt ${attempt + 2} of ${ATTEMPTS}.</p>`;
+          await new Promise((resolve) => setTimeout(resolve, WAIT_MS[attempt]));
+          if (controller.signal.aborted) return;
+          el.status.hidden = true;
+          continue;
+        }
+
+        el.body.hidden = true;
+        el.status.hidden = false;
+        el.status.classList.add('error');
+        el.status.innerHTML =
+          `<h2>Could not build the year</h2>` +
+          `<p style="font-family:var(--mono);font-size:12.5px">${esc((err as Error).message)}</p>` +
+          `<p>Odoo refused three times over about seven seconds. It is usually busy rather ` +
+          `than broken — try again in a minute.</p>`;
+      }
     }
   }
 

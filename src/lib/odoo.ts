@@ -392,7 +392,30 @@ export async function webSearchRead<T = any>(
 }
 
 /** Fetch a binary produced by an Odoo HTTP controller (reports, attachments). */
+/**
+ * Fetch a generated file, retrying a gateway that dropped it.
+ *
+ * This is the call that fails most often on this site: Odoo builds a
+ * spreadsheet of several thousand rows behind it, and under load the gateway
+ * in front gives up before Odoo finishes. It is a plain GET of a report that
+ * is regenerated on each request, so repeating it is safe, and it had no retry
+ * at all - one bad moment took out the whole page.
+ */
 export async function fetchBinary(
+  path: string,
+): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetchBinaryOnce(path);
+    } catch (err) {
+      const transient = err instanceof OdooError && err.transient;
+      if (!transient || attempt >= RETRY_BACKOFF_MS.length) throw err;
+      await sleep(RETRY_BACKOFF_MS[attempt]);
+    }
+  }
+}
+
+async function fetchBinaryOnce(
   path: string,
 ): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
   const session = await getSession();
@@ -407,6 +430,11 @@ export async function fetchBinary(
     throw new OdooError(
       `Odoo could not generate the report (HTTP ${res.status}).` +
         (m ? ` ${m[1].replace(/<[^>]+>/g, '').trim()}` : ''),
+      undefined,
+      // An HTML body where a spreadsheet was expected is Odoo's error page,
+      // which is a refusal rather than a hiccup, unless the status says
+      // otherwise.
+      TRANSIENT_STATUS.has(res.status),
     );
   }
 
