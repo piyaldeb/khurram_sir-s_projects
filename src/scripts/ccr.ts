@@ -38,6 +38,29 @@ interface Ccr {
   invoice: string;
   raisedBy: string;
   totalLead: string;
+  caLead: string;
+  paLead: string;
+  decision: 'Justified' | 'Not Justified' | 'Undecided';
+  caStatus: string;
+  paStatus: string;
+  caClosed: string | null;
+  paClosed: string | null;
+  rootCause: string;
+  reason: string;
+  actionToTake: string;
+  reportDate: string | null;
+  product: string;
+  finish: string;
+  salesType: string;
+  ticket: string;
+}
+
+interface Stage {
+  key: string;
+  label: string;
+  date: string | null;
+  note: string;
+  done: boolean;
 }
 
 interface CcrReport {
@@ -60,6 +83,7 @@ const STATE_LABEL: Record<string, string> = {
 
 const DIMENSIONS = [
   { key: 'classification', label: 'Classification', noun: 'classification' },
+  { key: 'decision', label: 'Justified status', noun: 'decision' },
   { key: 'type', label: 'Type', noun: 'type' },
   { key: 'department', label: 'Department', noun: 'department' },
   { key: 'team', label: 'Team', noun: 'team' },
@@ -204,6 +228,8 @@ if (root) {
     closed: number;
     /** Complaints that were decided not to be our fault. */
     notOurs: number;
+    justified: number;
+    undecided: number;
     /** Count per visible month, for the row's own trend. */
     series: number[];
     /** Mean days open, or to close. */
@@ -215,7 +241,14 @@ if (root) {
     months: string[];
     rows: Row[];
     all: Ccr[];
-    total: { count: number; open: number; closed: number; notOurs: number };
+    total: {
+      count: number;
+      open: number;
+      closed: number;
+      notOurs: number;
+      justified: number;
+      undecided: number;
+    };
     perMonth: number[];
     byCompany: { id: number; name: string; count: number; series: number[] }[];
     byState: { state: string; count: number }[];
@@ -262,6 +295,8 @@ if (root) {
           open: 0,
           closed: 0,
           notOurs: 0,
+          justified: 0,
+          undecided: 0,
           series: months.map(() => 0),
           age: 0,
           members: [],
@@ -273,7 +308,9 @@ if (root) {
       row.members.push(c);
       if (c.closed) row.closed += 1;
       else row.open += 1;
-      if (c.state === 'nonjust') row.notOurs += 1;
+      if (c.decision === 'Not Justified') row.notOurs += 1;
+      else if (c.decision === 'Justified') row.justified += 1;
+      else row.undecided += 1;
     }
 
     for (const row of rows.values()) {
@@ -295,7 +332,9 @@ if (root) {
         count: all.length,
         open: all.filter((c) => !c.closed).length,
         closed: all.filter((c) => c.closed).length,
-        notOurs: all.filter((c) => c.state === 'nonjust').length,
+        notOurs: all.filter((c) => c.decision === 'Not Justified').length,
+        justified: all.filter((c) => c.decision === 'Justified').length,
+        undecided: all.filter((c) => c.decision === 'Undecided').length,
       },
       perMonth,
       byCompany: [...companies.values()].sort((a, b) => a.id - b.id),
@@ -385,6 +424,39 @@ if (root) {
        </div>`,
     );
 
+    /*
+     * The decision runs in lockstep with the state, so this is the fork the
+     * workflow came out of rather than a second opinion on it: undecided ones
+     * have not been looked at, not-justified ones stop there, and only the
+     * justified ones go on to corrective and preventive action.
+     */
+    const decided = s.total.justified + s.total.notOurs;
+    const funnel = railBlock(
+      'Justified status',
+      `<p class="rail-figure">${qty(s.total.justified)} <span class="rail-of">justified</span></p>
+       <p class="rail-sub">${qty(s.total.notOurs)} judged not ours and ${qty(
+         s.total.undecided,
+       )} not yet decided. Of the ${qty(decided)} that were judged, ${pct(
+         decided ? s.total.justified / decided : 0,
+       )} were our fault.</p>
+       <div class="ccr-states">
+         ${[
+           ['Justified', s.total.justified, 's1'],
+           ['Not justified', s.total.notOurs, 's2'],
+           ['Undecided', s.total.undecided, 'accent'],
+         ]
+           .map(
+             ([label, n, cls]) => `<div class="ccr-state-row">
+               <span class="ccr-state-name">${esc(label as string)}</span>
+               ${bar(s.total.count ? ((n as number) / s.total.count) * 100 : 0, cls as string)}
+               <b>${qty(n as number)}</b>
+             </div>`,
+           )
+           .join('')}
+       </div>`,
+      'Every complaint at CA, PA or Done was judged justified first.',
+    );
+
     const open = s.all.filter((c) => !c.closed);
     const ages = open.map(ageOf).sort((a, b) => a - b);
     const median = ages.length ? ages[Math.floor(ages.length / 2)] : 0;
@@ -411,7 +483,7 @@ if (root) {
         )
       : '';
 
-    el.rail.innerHTML = head + raised + status + ageing + concentration;
+    el.rail.innerHTML = head + raised + funnel + status + ageing + concentration;
   }
 
   /* ----------------------------------------------------------------- trend */
@@ -480,9 +552,100 @@ if (root) {
   /* ------------------------------------------------------------ the sheet */
 
   const stateBadge = (c: Ccr) =>
-    `<span class="ccr-badge ${c.closed ? 'closed' : c.state === 'nonjust' ? 'notours' : 'open'}">${esc(
+    `<span class="ccr-badge ${c.closed ? 'closed' : c.decision === 'Not Justified' ? 'notours' : 'open'}">${esc(
       STATE_LABEL[c.state] ?? c.state,
-    )}</span>`;
+    )}</span>` +
+    `<span class="ccr-badge decision ${
+      c.decision === 'Justified' ? 'just' : c.decision === 'Not Justified' ? 'notjust' : 'undecided'
+    }">${esc(c.decision)}</span>`;
+
+  /**
+   * One complaint's trail, as a timeline.
+   *
+   * Every stage the record dates, in order, with whatever was written at it —
+   * the customer's words, the root cause where it was ours, the reason and the
+   * remedy where it was not. Stages not yet reached are drawn hollow, so the
+   * shape of the row says how far it has got before any of it is read.
+   */
+  function stagesOf(c: Ccr): Stage[] {
+    const trail: Stage[] = [
+      { key: 'raised', label: 'Raised', date: c.raised, note: c.comment, done: true },
+    ];
+    if (c.reportDate) {
+      trail.push({ key: 'reported', label: 'Reported', date: c.reportDate, note: '', done: true });
+    }
+
+    if (c.decision === 'Undecided') {
+      trail.push({ key: 'decision', label: 'Awaiting decision', date: null, note: '', done: false });
+      return trail;
+    }
+
+    // A complaint judged not ours never goes to corrective action, so drawing
+    // those stages for it would invent steps it was never in.
+    if (c.decision === 'Not Justified') {
+      trail.push({
+        key: 'decision',
+        label: 'Judged not justified',
+        date: null,
+        note: c.reason,
+        done: true,
+      });
+      if (c.actionToTake) {
+        trail.push({
+          key: 'action',
+          label: 'Action to take',
+          date: null,
+          note: c.actionToTake,
+          done: true,
+        });
+      }
+      return trail;
+    }
+
+    trail.push({
+      key: 'decision',
+      label: 'Judged justified',
+      date: null,
+      note: c.rootCause,
+      done: true,
+    });
+    trail.push({
+      key: 'ca',
+      label: 'Corrective action',
+      date: c.caClosed,
+      note: '',
+      done: c.caStatus === 'taken' || c.state === 'pa' || c.state === 'done',
+    });
+    trail.push({
+      key: 'pa',
+      label: 'Preventive action',
+      date: c.paClosed,
+      note: '',
+      done: c.paStatus === 'taken' || c.state === 'done',
+    });
+    trail.push({
+      key: 'closed',
+      label: 'Closed',
+      date: c.closingDate,
+      note: '',
+      done: c.state === 'done',
+    });
+    return trail;
+  }
+
+  function historyOf(c: Ccr): string {
+    return `<ol class="ccr-trail">${stagesOf(c)
+      .map(
+        (st) => `<li class="ccr-step${st.done ? '' : ' pending'}">
+          <div class="ccr-step-head">
+            <span class="ccr-step-label">${esc(st.label)}</span>
+            ${st.date ? `<span class="ccr-step-date">${esc(day(st.date))}</span>` : ''}
+          </div>
+          ${st.note ? `<p class="ccr-step-note">${esc(st.note)}</p>` : ''}
+        </li>`,
+      )
+      .join('')}</ol>`;
+  }
 
   /**
    * The complaints behind one row, opened underneath it.
@@ -496,6 +659,8 @@ if (root) {
       ? row.members.filter(
           (c) =>
             c.comment.toLowerCase().includes(query) ||
+            c.rootCause.toLowerCase().includes(query) ||
+            c.reason.toLowerCase().includes(query) ||
             c.name.toLowerCase().includes(query) ||
             c.customer.toLowerCase().includes(query),
         )
@@ -514,13 +679,15 @@ if (root) {
             }</span>
             <span class="ccr-age">${qty(ageOf(c))}d</span>
           </div>
-          <p class="ccr-comment">${esc(c.comment) || '<em>no comment recorded</em>'}</p>
+          ${historyOf(c)}
           <div class="ccr-item-foot">
             ${c.oa ? `<span>${esc(c.oa)}</span>` : ''}
             ${c.invoice ? `<span>${esc(c.invoice)}</span>` : ''}
             ${c.department !== '(unassigned)' ? `<span>${esc(c.department)}</span>` : ''}
             ${c.type !== '(no type)' ? `<span>${esc(c.type)}</span>` : ''}
+            ${c.product ? `<span>${esc(c.product)}</span>` : ''}
             ${c.raisedBy ? `<span>raised by ${esc(c.raisedBy)}</span>` : ''}
+            ${c.totalLead ? `<span>lead ${esc(c.totalLead)}</span>` : ''}
           </div>
         </li>`,
       )
@@ -543,9 +710,15 @@ if (root) {
             <div class="oa-stat"><span class="oa-stat-label">Closed</span><b class="oa-stat-figure">${qty(
               row.closed,
             )}</b></div>
+            <div class="oa-stat"><span class="oa-stat-label">Justified</span><b class="oa-stat-figure">${qty(
+              row.justified,
+            )}</b><span class="oa-stat-note">our fault</span></div>
             <div class="oa-stat"><span class="oa-stat-label">Not ours</span><b class="oa-stat-figure">${qty(
               row.notOurs,
-            )}</b><span class="oa-stat-note">decided non-justified</span></div>
+            )}</b><span class="oa-stat-note">judged not justified</span></div>
+            <div class="oa-stat"><span class="oa-stat-label">Undecided</span><b class="oa-stat-figure">${qty(
+              row.undecided,
+            )}</b></div>
             <div class="oa-stat"><span class="oa-stat-label">Average age</span><b class="oa-stat-figure">${qty(
               row.age,
             )}</b><span class="oa-stat-note">days</span></div>
@@ -574,12 +747,14 @@ if (root) {
             r.members.some(
               (c) =>
                 c.comment.toLowerCase().includes(query) ||
+                c.rootCause.toLowerCase().includes(query) ||
+                c.reason.toLowerCase().includes(query) ||
                 c.name.toLowerCase().includes(query) ||
                 c.customer.toLowerCase().includes(query),
             ),
         )
       : s.rows;
-    const COLUMNS = 8;
+    const COLUMNS = 10;
 
     if (!rows.length) {
       el.grid.innerHTML = `<div class="state"><h2>${
@@ -607,10 +782,12 @@ if (root) {
             <td class="bar-cell"><span class="mini-bar"><i style="width:${(
               widest ? (row.count / widest) * 100 : 0
             ).toFixed(1)}%"></i></span></td>
+            <td class="num">${qty(row.justified)}</td>
+            <td class="num muted">${qty(row.notOurs)}</td>
+            <td class="num muted">${qty(row.undecided)}</td>
             <td class="num">${qty(row.open)}</td>
             <td class="num">${qty(row.closed)}</td>
             <td class="num ${closedShare < 0.05 ? 'behind' : ''}">${pct(closedShare, 1)}</td>
-            <td class="num muted">${qty(row.notOurs)}</td>
             <td class="num">${qty(row.age)}</td>
             <td class="spark-cell">${sparkline(row.series)}</td>
           </tr>` + (open ? detailRow(row, COLUMNS + 1) : '')
@@ -622,10 +799,12 @@ if (root) {
       <td class="sticky-col">All ${qty(s.rows.length)} ${esc(dimension().noun)} rows</td>
       <td class="num">${qty(s.total.count)}</td>
       <td class="bar-cell"></td>
+      <td class="num">${qty(s.total.justified)}</td>
+      <td class="num muted">${qty(s.total.notOurs)}</td>
+      <td class="num muted">${qty(s.total.undecided)}</td>
       <td class="num">${qty(s.total.open)}</td>
       <td class="num">${qty(s.total.closed)}</td>
       <td class="num">${pct(s.total.count ? s.total.closed / s.total.count : 0, 1)}</td>
-      <td class="num muted">${qty(s.total.notOurs)}</td>
       <td class="num"></td>
       <td class="spark-cell"></td>
     </tr>`;
@@ -636,10 +815,12 @@ if (root) {
           <th class="sticky-col">${esc(dimension().label)}</th>
           <th class="num">CCRs</th>
           <th class="bar-cell"></th>
+          <th class="num">Justified</th>
+          <th class="num">Not ours</th>
+          <th class="num">Undecided</th>
           <th class="num">Open</th>
           <th class="num">Closed</th>
           <th class="num">Closed %</th>
-          <th class="num">Not ours</th>
           <th class="num">Avg age</th>
           <th class="spark-cell">Trend</th>
         </tr>
@@ -802,7 +983,14 @@ if (root) {
         'Invoice',
         'Raised by',
         'Age days',
+        'Decision',
+        'CA status',
+        'PA status',
+        'Total lead',
         'Comment',
+        'Root cause',
+        'Reason not justified',
+        'Action to take',
       ].join(','),
       ...s.all.map((c) =>
         [
@@ -821,7 +1009,14 @@ if (root) {
           cell(c.invoice),
           cell(c.raisedBy),
           ageOf(c),
+          cell(c.decision),
+          cell(c.caStatus),
+          cell(c.paStatus),
+          cell(c.totalLead),
           cell(c.comment),
+          cell(c.rootCause),
+          cell(c.reason),
+          cell(c.actionToTake),
         ].join(','),
       ),
     ];

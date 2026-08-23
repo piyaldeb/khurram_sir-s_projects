@@ -112,9 +112,11 @@ const activeGroup = (items: { href: string }[]) => items.some((i) => path.starts
           </a>
         </nav>
         <div class="topbar-spacer"></div>
-        <div class="conn" title={connectionLabel}>
+        <!-- The dot is the whole signal: green means the reports are live. Who is
+             logged in and against which database is on hover, not in the bar. -->
+        <div class="conn" title={connectionLabel} aria-label={connectionLabel}>
           <span class={connected ? 'dot' : 'dot off'}></span>
-          <span class="conn-label">{connectionLabel}</span>
+          <span class="conn-label">{connected ? 'Live' : 'Not connected'}</span>
         </div>
         <button class="btn" id="theme-toggle" type="button" aria-label="Toggle colour theme">
           Theme

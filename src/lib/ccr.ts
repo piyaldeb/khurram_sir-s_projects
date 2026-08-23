@@ -17,6 +17,25 @@
  * in the open pile is a very different picture from 258 closed ones, and the
  * page shows the states rather than only the two buckets.
  *
+ * THE HISTORY OF ONE COMPLAINT
+ * ---------------------------
+ * Odoo's own audit trail is out of reach: `sale.ccr.ca`, `sale.ccr.pa` and
+ * `sale.ccr.service` are access-denied to this login, and reading `mail.message`
+ * directly is refused on security grounds. What the record itself carries is
+ * enough to reconstruct the trail, because every stage stamps its own date:
+ *
+ *   raised     ticket_raised_date, and the complaint text
+ *   reported   report_date
+ *   decided    justification — Justified or Not Justified — with the root
+ *              cause where it was ours, or the reason and the action to take
+ *              where it was not
+ *   CA / PA    ca_status and pa_status, with their closing dates
+ *   closed     closing_date, and the lead time Odoo computed
+ *
+ * Those fields ship flat and the page assembles the trail from them. Shipping
+ * a pre-built trail meant every note travelled twice — once in its own field
+ * and once inside the stage — and doubled the payload for nothing.
+ *
  * The whole table is small enough to send at once, so the page filters and
  * groups in the browser and the server does one cached read.
  */
@@ -39,6 +58,18 @@ export const EXCLUDED_STATES = ['draft'];
  * harder to read than one that walks the process.
  */
 export const STATE_ORDER = ['inter', 'just', 'nonjust', 'ca', 'pa', 'done', 'cancel'] as const;
+
+/**
+ * The decision, which runs in lockstep with the state.
+ *
+ * Every one of the 643 intermediate complaints is undecided, all 258
+ * non-justified ones are Not Justified, and every complaint at CA, PA or Done
+ * is Justified. So the decision is not a second opinion on the state — it is
+ * the fork the state came out of, and worth its own column.
+ */
+export type Decision = 'Justified' | 'Not Justified' | 'Undecided';
+
+export const DECISIONS: Decision[] = ['Justified', 'Not Justified', 'Undecided'];
 
 export const STATE_LABEL: Record<string, string> = {
   draft: 'Draft',
@@ -79,6 +110,26 @@ export interface Ccr {
   raisedBy: string;
   /** Free text like "12 days", straight from Odoo. */
   totalLead: string;
+  caLead: string;
+  paLead: string;
+
+  /** Justified, Not Justified, or not yet decided. */
+  decision: Decision;
+  /** Where the corrective and preventive actions have got to. */
+  caStatus: string;
+  paStatus: string;
+  caClosed: string | null;
+  paClosed: string | null;
+
+  /** What the record says about itself at each stage. */
+  rootCause: string;
+  reason: string;
+  actionToTake: string;
+  reportDate: string | null;
+  product: string;
+  finish: string;
+  salesType: string;
+  ticket: string;
 }
 
 export interface CcrReport {
@@ -101,7 +152,16 @@ function tidy(v: unknown): string {
     .trim();
 }
 
-const CACHE_KEY = 'ccr-all';
+/**
+ * The cache key carries the document's shape, not just its subject.
+ *
+ * A cached document written by an older version of this file is still valid
+ * JSON and will be served as though it were current — which is how adding the
+ * decision and the history trail produced a page reading fields that were not
+ * there. Bump the suffix whenever the shape changes and the old entry is simply
+ * ignored rather than silently believed.
+ */
+const CACHE_KEY = 'ccr-v3';
 
 function isFresh(entry: CcrReport): boolean {
   return Date.now() - new Date(entry.fetchedAt).getTime() < FRESH_MINUTES * 60_000;
@@ -136,6 +196,21 @@ export async function ccrReport(): Promise<CcrReport> {
         'invoice_reference',
         'raised_by',
         'total_lead',
+        'ca_lead',
+        'pa_lead',
+        'report_date',
+        'quality_action',
+        'ca_status',
+        'pa_status',
+        'ca_closing_date',
+        'pa_closing_date',
+        'analysis_activity',
+        'reason',
+        'non_justify_action',
+        'fg_product',
+        'finish',
+        'sales_type',
+        'ticket_id',
       ],
     ],
     kwargs: { context, limit: 0, order: 'ticket_raised_date desc' },
@@ -154,6 +229,10 @@ export async function ccrReport(): Promise<CcrReport> {
     if (raised) months.add(raised.slice(0, 7));
 
     const state = text(r.states);
+    const raw = text(r.justification);
+    const decision: Decision =
+      raw === 'Justified' ? 'Justified' : raw === 'Not Justified' ? 'Not Justified' : 'Undecided';
+
     return {
       id: r.id,
       name: text(r.name),
@@ -170,13 +249,30 @@ export async function ccrReport(): Promise<CcrReport> {
       customer: nameOf(r.customer) || '(no customer)',
       buyer: nameOf(r.buyer) || '(no buyer)',
       comment: tidy(r.complaint),
-      justification: text(r.justification) || 'Undecided',
+      justification: raw || 'Undecided',
       orderQty: num(Number(r.order_quantity)),
       rejectedQty: num(Number(r.rejected_quantity)),
       oa: nameOf(r.oa_number),
       invoice: text(r.invoice_reference),
       raisedBy: nameOf(r.raised_by),
       totalLead: text(r.total_lead),
+      caLead: text(r.ca_lead),
+      paLead: text(r.pa_lead),
+
+      decision,
+      caStatus: text(r.ca_status),
+      paStatus: text(r.pa_status),
+      caClosed: text(r.ca_closing_date).slice(0, 10) || null,
+      paClosed: text(r.pa_closing_date).slice(0, 10) || null,
+
+      rootCause: tidy(r.analysis_activity),
+      reason: tidy(r.reason),
+      actionToTake: tidy(r.non_justify_action),
+      reportDate: text(r.report_date).slice(0, 10) || null,
+      product: nameOf(r.fg_product),
+      finish: nameOf(r.finish),
+      salesType: text(r.sales_type),
+      ticket: nameOf(r.ticket_id),
     };
   });
 

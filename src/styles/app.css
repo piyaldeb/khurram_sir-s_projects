@@ -4373,3 +4373,96 @@ table.rmd-ship td.mono {
     grid-template-columns: 78px minmax(0, 1fr) 30px;
   }
 }
+
+/*
+ * One complaint's trail. The stages are drawn as a rail with a marker per
+ * stage, so how far a complaint has got is legible before any of it is read —
+ * a hollow marker is a stage not yet reached.
+ */
+.ccr-trail {
+  margin: 9px 0 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ccr-step {
+  position: relative;
+  padding-left: 18px;
+}
+
+.ccr-step::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.ccr-step.pending::before {
+  background: var(--surface);
+  border: 1.5px solid var(--rule);
+}
+
+/* The rail joining the markers stops at the last one. */
+.ccr-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 14px;
+  bottom: -10px;
+  width: 1px;
+  background: var(--grid);
+}
+
+.ccr-step-head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.ccr-step-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.ccr-step.pending .ccr-step-label {
+  color: var(--ink-muted);
+}
+
+.ccr-step-date {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.ccr-step-note {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The decision sits beside the state, because it is the fork the state came
+   out of rather than a restatement of it. */
+.ccr-badge.decision.just {
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+  color: var(--good);
+}
+
+.ccr-badge.decision.notjust {
+  background: color-mix(in srgb, var(--critical) 12%, transparent);
+  color: var(--critical);
+}
+
+.ccr-badge.decision.undecided {
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+}
