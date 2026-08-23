@@ -18,7 +18,22 @@ const path = Astro.url.pathname;
 const sales = [
   { href: '/oa-released', label: 'OA released', hint: 'Bulk orders let go to the floor' },
 ];
-const inSales = sales.some((item) => path.startsWith(item.href));
+
+/**
+ * The RM module. Both of these read the raw-material side of inventory, so
+ * they sit together rather than one being a report and the other a tab.
+ */
+const rm = [
+  { href: '/rm-demand', label: 'Demand vs consumption', hint: 'Zipper: required, consumed, GIT' },
+  { href: '/rm-consumption', label: 'Consumption history', hint: 'What the plant has burned' },
+  { href: '/ageing', label: '180+ stock', hint: 'Material sat over 180 days' },
+];
+
+const groups = [
+  { id: 'sales', label: 'Sales', items: sales },
+  { id: 'rm', label: 'RM', items: rm },
+];
+const activeGroup = (items: { href: string }[]) => items.some((i) => path.startsWith(i.href));
 ---
 
 <!doctype html>
@@ -43,32 +58,34 @@ const inSales = sales.some((item) => path.startsWith(item.href));
         </div>
         <nav class="nav" aria-label="Sections" id="site-nav">
           <a href="/" class:list={['nav-link', { active: path === '/' }]}>Production report</a>
-          <div class="nav-group" data-nav-group>
-            <button
-              type="button"
-              class:list={['nav-link', 'nav-trigger', { active: inSales }]}
-              aria-expanded="false"
-              aria-haspopup="true"
-              aria-controls="nav-sales"
-            >
-              Sales
-              <span class="nav-caret" aria-hidden="true">▾</span>
-            </button>
-            <div class="nav-menu" id="nav-sales" role="menu" aria-label="Sales">
-              {
-                sales.map((item) => (
-                  <a
-                    href={item.href}
-                    role="menuitem"
-                    class:list={['nav-menu-item', { active: path.startsWith(item.href) }]}
-                  >
-                    <strong>{item.label}</strong>
-                    <small>{item.hint}</small>
-                  </a>
-                ))
-              }
-            </div>
-          </div>
+          {
+            groups.map((group) => (
+              <div class="nav-group" data-nav-group>
+                <button
+                  type="button"
+                  class:list={['nav-link', 'nav-trigger', { active: activeGroup(group.items) }]}
+                  aria-expanded="false"
+                  aria-haspopup="true"
+                  aria-controls={`nav-${group.id}`}
+                >
+                  {group.label}
+                  <span class="nav-caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="nav-menu" id={`nav-${group.id}`} role="menu" aria-label={group.label}>
+                  {group.items.map((item) => (
+                    <a
+                      href={item.href}
+                      role="menuitem"
+                      class:list={['nav-menu-item', { active: path.startsWith(item.href) }]}
+                    >
+                      <strong>{item.label}</strong>
+                      <small>{item.hint}</small>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))
+          }
           <a href="/budget" class:list={['nav-link', { active: path.startsWith('/budget') }]}>
             Budget follow-up
           </a>
@@ -77,9 +94,6 @@ const inSales = sales.some((item) => path.startsWith(item.href));
           </a>
           <a href="/ot-cost" class:list={['nav-link', { active: path.startsWith('/ot-cost') }]}>
             OT cost
-          </a>
-          <a href="/ageing" class:list={['nav-link', { active: path.startsWith('/ageing') }]}>
-            180+ stock
           </a>
           <a
             href="/sample-leadtime"
@@ -102,7 +116,7 @@ const inSales = sales.some((item) => path.startsWith(item.href));
 
     <script is:inline>
       /*
-       * The Sales menu opens on hover in CSS. This adds the ways a pointer
+       * The section menus open on hover in CSS. This adds the ways a pointer
        * cannot: click and Enter for touch and keyboard, Escape to close, and a
        * click anywhere else to dismiss. `data-open` only ever adds to what
        * :hover and :focus-within already do.

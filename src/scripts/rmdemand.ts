@@ -1,0 +1,761 @@
+/**
+ * Zipper RM demand plan against what was actually consumed.
+ *
+ * Nothing on this page is copied from the sheet's answer columns. Required is
+ * the demand times the rate; consumed, stock and GIT come from Odoo. The sheet
+ * contributes its questions — the demand, the rate, and the two hand-entered
+ * stock columns — not its answers.
+ *
+ * Three tables behind one switch, because they answer three questions in
+ * different vocabularies and stacking them would imply a join that does not
+ * exist:
+ *
+ *   Materials — the plan's own rows, recomputed.
+ *   Sliders   — the STI slider block of the same sheet.
+ *   Odoo      — the month by item category, so the plan can be checked against
+ *               the system rather than trusted.
+ *
+ * Deviation is consumed minus required. Over the requirement is the one that
+ * costs money, so that is the red one; at or under it is green.
+ *
+ * Quantities are counted in the ledger's own units and carry no symbol; money
+ * always does.
+ */
+import { barChart, bindChartTooltips } from '../lib/charts';
+import { skeleton } from '../lib/skeleton';
+
+interface DemandRow {
+  ref: string;
+  group: string;
+  material: string;
+  type: string | null;
+  slider: string | null;
+  note: string | null;
+  demand: { bd: number | null; export: number | null; other: number | null };
+  demandTotal: number;
+  rate: number | null;
+  effectiveRate: number | null;
+  required: number;
+  requiredFrom: 'computed' | 'sheet';
+  op: number | null;
+  ih: number | null;
+  opIh: number | null;
+  consumption: number | null;
+  consumptionValue: number | null;
+  currentStock: number | null;
+  currentStockValue: number | null;
+  git: number | null;
+  gitValue: number | null;
+  gitLines: number;
+  totalAvailable: number | null;
+  availability: number | null;
+  sheetStock: number | null;
+  matchedOn: string[];
+}
+
+interface LiveCategory {
+  category: string;
+  consumption: number;
+  consumptionValue: number;
+  currentStock: number;
+  currentStockValue: number;
+  git: number;
+  gitValue: number;
+  gitLines: number;
+}
+
+interface DemandReport {
+  month: string;
+  company: string;
+  source: string;
+  materials: DemandRow[];
+  sliders: DemandRow[];
+  live: LiveCategory[];
+  unmapped: string[];
+  unmatched: string[];
+  error?: string;
+}
+
+interface MonthPoint {
+  month: string;
+  consumption: number;
+  consumptionValue: number;
+  closing: number;
+  closingValue: number;
+}
+
+interface Shipment {
+  transit: string;
+  vendor: string;
+  po: string;
+  eta: string | null;
+  ihPlan: string | null;
+  mode: string;
+  qty: number;
+  value: number;
+  product: string;
+  category: string;
+}
+
+interface ItemLine {
+  code: string;
+  name: string;
+  unit: string;
+  consumption: number;
+  consumptionValue: number;
+  closing: number;
+  closingValue: number;
+}
+
+interface RowDetail {
+  key: string;
+  matchedOn: string[];
+  months: MonthPoint[];
+  shipments: Shipment[];
+  items: ItemLine[];
+  error?: string;
+}
+
+type View = 'materials' | 'sliders' | 'live';
+
+const root = document.querySelector<HTMLElement>('.rmd');
+
+if (root) {
+  const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
+  const el = {
+    status: $<HTMLElement>('#rmd-status'),
+    body: $<HTMLElement>('#rmd-body'),
+    rail: $<HTMLElement>('#rmd-rail'),
+    grid: $<HTMLElement>('#rmd-grid'),
+    note: $<HTMLElement>('#rmd-note'),
+    viewSeg: $<HTMLElement>('#rmd-view'),
+  };
+
+  const state = {
+    view: 'materials' as View,
+    open: null as string | null,
+    report: null as DemandReport | null,
+    detail: new Map<string, RowDetail | 'loading'>(),
+  };
+
+  const nf = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+  const qty = (v: number | null | undefined) =>
+    v === null || v === undefined ? '—' : nf.format(Math.round(v));
+  const usd = (v: number | null | undefined) =>
+    v === null || v === undefined ? '—' : `$${nf.format(Math.round(v))}`;
+  const usdShort = (v: number | null | undefined) => {
+    if (v === null || v === undefined) return '—';
+    const a = Math.abs(v);
+    if (a >= 1e6) return `$${(v / 1e6).toFixed(a >= 1e7 ? 1 : 2)}M`;
+    if (a >= 1e3) return `$${Math.round(v / 1e3)}k`;
+    return `$${Math.round(v)}`;
+  };
+  /**
+   * Cover, which must never round across its own threshold.
+   *
+   * 99.8% shown as a red "100%" reads as a contradiction — the colour says
+   * short, the number says covered. One decimal near the line, none once it is
+   * far enough away for the precision to be noise.
+   */
+  const pct = (v: number | null) => {
+    if (v === null || v === undefined || !Number.isFinite(v)) return '—';
+    const near = Math.abs(v - 1) < 0.05;
+    return `${(v * 100).toFixed(near ? 1 : 0)}%`;
+  };
+  const esc = (s: string | number) =>
+    String(s).replace(
+      /[&<>"]/g,
+      (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!,
+    );
+
+  const monthShort = (iso: string) =>
+    new Date(`${iso}-01T00:00:00Z`).toLocaleDateString('en-GB', {
+      month: 'short',
+      year: '2-digit',
+      timeZone: 'UTC',
+    });
+  const monthLong = (iso: string) =>
+    new Date(`${iso}-01T00:00:00Z`).toLocaleDateString('en-GB', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  const day = (iso: string | null) =>
+    !iso
+      ? '—'
+      : new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          timeZone: 'UTC',
+        });
+
+  const VIEWS: { key: View; label: string }[] = [
+    { key: 'materials', label: 'Materials' },
+    { key: 'sliders', label: 'STI sliders' },
+    { key: 'live', label: 'Odoo, this month' },
+  ];
+
+  const rowsOf = (r: DemandReport) =>
+    state.view === 'sliders' ? r.sliders : state.view === 'materials' ? r.materials : [];
+  const keyOf = (row: DemandRow) => `${row.ref}|${row.slider ?? row.material}|${row.group}`;
+
+  /* ------------------------------------------------------------------ load */
+
+  async function load() {
+    el.status.hidden = true;
+    el.body.hidden = false;
+    el.rail.innerHTML = skeleton.rail();
+    el.grid.innerHTML = skeleton.table(12, 12);
+
+    try {
+      const res = await fetch('/api/rm-demand');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      state.report = data as DemandReport;
+      render();
+    } catch (err) {
+      el.body.hidden = true;
+      el.status.hidden = false;
+      el.status.classList.add('error');
+      el.status.innerHTML = `<h2>Could not build the report</h2><p style="font-family:var(--mono);font-size:12.5px">${esc(
+        (err as Error).message,
+      )}</p>`;
+    }
+  }
+
+  async function loadDetail(row: DemandRow) {
+    const key = keyOf(row);
+    if (state.detail.has(key)) return;
+    state.detail.set(key, 'loading');
+
+    const kind = row.slider ? 'slider' : 'material';
+    const target = row.slider ?? row.material;
+    const group = row.slider ? '' : `&group=${encodeURIComponent(row.group)}`;
+
+    try {
+      const res = await fetch(
+        `/api/rm-demand?row=${encodeURIComponent(target)}&kind=${kind}${group}`,
+      );
+      const data = await res.json();
+      state.detail.set(
+        key,
+        res.ok ? (data as RowDetail) : ({ ...data, error: data?.error } as RowDetail),
+      );
+    } catch (err) {
+      state.detail.set(key, {
+        key,
+        matchedOn: [],
+        months: [],
+        shipments: [],
+        items: [],
+        error: (err as Error).message,
+      });
+    }
+    if (state.open === key && state.report) renderGrid(state.report);
+  }
+
+  /* --------------------------------------------------------------- shaping */
+
+  const deviationOf = (row: DemandRow) =>
+    row.consumption === null ? null : row.consumption - row.required;
+
+  interface Totals {
+    required: number;
+    consumption: number;
+    consumptionValue: number;
+    currentStock: number;
+    currentStockValue: number;
+    git: number;
+    gitValue: number;
+    totalAvailable: number;
+  }
+
+  function totalsOf(rows: DemandRow[]): Totals {
+    const add = (pick: (r: DemandRow) => number | null) =>
+      rows.reduce((a, r) => a + (pick(r) ?? 0), 0);
+    return {
+      required: add((r) => r.required),
+      consumption: add((r) => r.consumption),
+      consumptionValue: add((r) => r.consumptionValue),
+      currentStock: add((r) => r.currentStock),
+      currentStockValue: add((r) => r.currentStockValue),
+      git: add((r) => r.git),
+      gitValue: add((r) => r.gitValue),
+      totalAvailable: add((r) => r.totalAvailable),
+    };
+  }
+
+  /* ------------------------------------------------------------------ rail */
+
+  const railBlock = (label: string, body: string, note = '') =>
+    `<section class="rail-block">
+      <h2>${label}</h2>
+      ${body}
+      ${note ? `<p class="rail-note">${note}</p>` : ''}
+    </section>`;
+
+  function renderRail(r: DemandReport) {
+    const materials = totalsOf(r.materials);
+    const sliders = totalsOf(r.sliders);
+
+    // Materials and sliders are counted in different units — grosses against
+    // pieces — so they are never added together, only shown side by side.
+    const block = (label: string, t: Totals, of: DemandRow[]) => {
+      const dev = t.consumption - t.required;
+      const over = dev > 0;
+      const short = of.filter((row) => row.availability !== null && row.availability < 1).length;
+      return `<div class="rail-split">
+        <div class="rail-split-head">
+          <span>${esc(label)}</span>
+          <b>${qty(t.consumption)} <span class="rail-of">of ${qty(t.required)}</span></b>
+        </div>
+        <p class="rail-note">
+          <span class="rmd-dev ${over ? 'over' : 'under'}">${over ? '▲ +' : '▼ '}${qty(
+            Math.abs(dev),
+          )}</span>
+          against the requirement · ${usd(t.consumptionValue)} consumed · ${qty(short)} row${
+            short === 1 ? '' : 's'
+          } under cover
+        </p>
+      </div>`;
+    };
+
+    const head = `<div class="rail-head">
+      <p class="eyebrow">${esc(monthLong(r.month))} · ${esc(r.company)}</p>
+      <h2 class="rail-title">Required against consumed</h2>
+      <p class="rail-sub">The month's requirement worked out from the demand and the rate, against
+      what the ledger says was actually issued — and what is still on the water behind it.</p>
+    </div>`;
+
+    const totals = railBlock(
+      'Against the plan',
+      block('Materials', materials, r.materials) + block('STI sliders', sliders, r.sliders),
+      'Materials are grosses, sliders are pieces — the two are never added.',
+    );
+
+    const live = r.live.reduce(
+      (a, c) => ({
+        stock: a.stock + c.currentStock,
+        stockValue: a.stockValue + c.currentStockValue,
+        git: a.git + c.git,
+        gitValue: a.gitValue + c.gitValue,
+        lines: a.lines + c.gitLines,
+      }),
+      { stock: 0, stockValue: 0, git: 0, gitValue: 0, lines: 0 },
+    );
+
+    const onWater = railBlock(
+      'On the water',
+      `<p class="rail-figure">${usd(live.gitValue)}</p>
+       <p class="rail-sub">${qty(live.git)} units in transit across ${qty(live.lines)} line${
+         live.lines === 1 ? '' : 's'
+       } not yet in-housed, against ${usd(live.stockValue)} in stock at month close.</p>`,
+      'A position, not a flow — whatever month it shipped in.',
+    );
+
+    el.rail.innerHTML = head + totals + onWater;
+  }
+
+  /* ----------------------------------------------------------------- cells */
+
+  const devCell = (dev: number | null) => {
+    if (dev === null) return '<td class="num">—</td>';
+    if (Math.round(dev) === 0) return '<td class="num muted">0</td>';
+    const over = dev > 0;
+    return `<td class="num"><span class="rmd-dev ${over ? 'over' : 'under'}">${
+      over ? '▲ +' : '▼ '
+    }${qty(Math.abs(dev))}</span></td>`;
+  };
+
+  const availCell = (v: number | null) =>
+    v === null || v === undefined || !Number.isFinite(v)
+      ? '<td class="num muted">—</td>'
+      : `<td class="num ${v < 1 ? 'behind' : 'ahead'}">${pct(v)}</td>`;
+
+  /** A quantity with what it is worth underneath it. */
+  const pairCell = (n: number | null, value: number | null, tinted = false) =>
+    `<td class="num${tinted ? ' tinted' : ''}"><span class="rmd-qty">${qty(n)}</span>${
+      value === null || value === undefined ? '' : `<span class="rmd-val">${usdShort(value)}</span>`
+    }</td>`;
+
+  /* ------------------------------------------------------------ drill-down */
+
+  function detailRow(row: DemandRow, span: number): string {
+    const detail = state.detail.get(keyOf(row));
+    const loaded = detail && detail !== 'loading' ? detail : null;
+
+    const stat = (label: string, figure: string, note = '') =>
+      `<div class="oa-stat">
+        <span class="oa-stat-label">${esc(label)}</span>
+        <b class="oa-stat-figure">${figure}</b>
+        ${note ? `<span class="oa-stat-note">${note}</span>` : ''}
+      </div>`;
+
+    const inputs = `<div class="oa-stats">
+      ${stat('Demand BD', qty(row.demand.bd), 'zippers')}
+      ${stat('Export', qty(row.demand.export), 'zippers')}
+      ${stat('Total demand', qty(row.demandTotal), 'zippers ordered')}
+      ${row.rate === null ? '' : stat('Rate', String(row.rate), 'per zipper')}
+      ${stat(
+        'Required',
+        qty(row.required),
+        row.requiredFrom === 'computed' && row.effectiveRate
+          ? `${qty(row.demandTotal)} × ${row.effectiveRate}`
+          : 'carried from the sheet',
+      )}
+      ${stat('OP + I/H', qty(row.opIh), `${qty(row.op)} + ${qty(row.ih)}`)}
+    </div>`;
+
+    const head = `<div class="oa-detail-head">
+      <div class="oa-detail-title">
+        <p class="eyebrow">${esc(row.group || `ref ${row.ref}`)}${
+          loaded?.matchedOn.length ? ` · ${esc(loaded.matchedOn.slice(0, 2).join(', '))}` : ''
+        }</p>
+        <h2>${esc(row.slider ?? row.material)}</h2>
+      </div>
+      ${inputs}
+    </div>`;
+
+    if (!loaded) {
+      return `<tr class="day-detail"><td colspan="${span}">
+        <div class="oa-detail">${head}
+          <div class="oa-detail-loading"><span class="spinner"></span> Reading ${esc(
+            row.slider ?? row.material,
+          )} from Odoo…</div>
+        </div></td></tr>`;
+    }
+    if (loaded.error) {
+      return `<tr class="day-detail"><td colspan="${span}">
+        <div class="oa-detail">${head}<p class="oa-panel-empty">${esc(loaded.error)}</p></div>
+      </td></tr>`;
+    }
+
+    const items = loaded.items.length
+      ? `<section class="oa-panel">
+          <header><h3>Items underneath</h3><span>${esc(
+            monthShort(state.report?.month ?? ''),
+          )}</span></header>
+          <ol class="oa-breakdown rmd-items">
+            ${loaded.items
+              .slice(0, 8)
+              .map(
+                (i) => `<li>
+                  <span class="oa-bd-name">${esc(i.name)}<span class="rmd-code">${esc(
+                    i.code,
+                  )}</span></span>
+                  <span class="oa-bd-value">${qty(i.consumption)}<span class="rmd-unit">${esc(
+                    i.unit,
+                  )}</span></span>
+                  <span class="oa-bd-share">${usdShort(i.consumptionValue)}</span>
+                </li>`,
+              )
+              .join('')}
+          </ol>
+        </section>`
+      : '';
+
+    const shipments = loaded.shipments.length
+      ? `<section class="oa-panel wide">
+          <header>
+            <h3>What is on the water</h3>
+            <span>${qty(loaded.shipments.length)} line${
+              loaded.shipments.length === 1 ? '' : 's'
+            } not yet in-housed</span>
+          </header>
+          <div class="rmd-ship-scroll">
+            <table class="grid mini rmd-ship">
+              <thead><tr>
+                <th class="text">Shipment</th><th class="text">Vendor</th><th class="text">PO</th>
+                <th class="text">Mode</th><th class="text">ETA</th><th class="text">I/H plan</th>
+                <th class="num">Qty</th><th class="num">Value</th>
+              </tr></thead>
+              <tbody>${loaded.shipments
+                .slice(0, 12)
+                .map(
+                  (s) => `<tr>
+                    <td class="text mono">${esc(s.transit)}</td>
+                    <td class="text">${esc(s.vendor)}</td>
+                    <td class="text mono">${esc(s.po)}</td>
+                    <td class="text">${esc(s.mode)}</td>
+                    <td class="text">${esc(day(s.eta))}</td>
+                    <td class="text">${esc(day(s.ihPlan))}</td>
+                    <td class="num">${qty(s.qty)}</td>
+                    <td class="num">${usd(s.value)}</td>
+                  </tr>`,
+                )
+                .join('')}</tbody>
+            </table>
+          </div>
+        </section>`
+      : `<section class="oa-panel wide">
+          <header><h3>What is on the water</h3></header>
+          <p class="oa-panel-empty">Nothing in transit for this row.</p>
+        </section>`;
+
+    return `<tr class="day-detail"><td colspan="${span}">
+      <div class="oa-detail">
+        ${head}
+        <div class="chart-host rmd-history"></div>
+        ${items ? `<div class="oa-panels">${items}</div>` : ''}
+        ${shipments}
+      </div>
+    </td></tr>`;
+  }
+
+  /** Draws the open row's twelve-month consumption once it is in the document. */
+  function drawOpenHistory() {
+    if (!state.open) return;
+    const detail = state.detail.get(state.open);
+    if (!detail || detail === 'loading' || !detail.months.length) return;
+    const host = document.querySelector<HTMLElement>('.rmd-history');
+    if (!host) return;
+
+    host.innerHTML = barChart({
+      categories: detail.months.map((m) => monthShort(m.month)),
+      width: Math.max(host.clientWidth || 640, 420),
+      height: 200,
+      format: qty,
+      series: [
+        { name: 'Consumed', color: '--series-1', values: detail.months.map((m) => m.consumption) },
+      ],
+    });
+    bindChartTooltips(host);
+  }
+
+  /* ----------------------------------------------------------------- table */
+
+  function groupedRows(rows: DemandRow[], cells: (row: DemandRow) => string, span: number): string {
+    let last = '';
+    return rows
+      .map((row) => {
+        const label = row.group || `ref ${row.ref}`;
+        const heading =
+          label === last
+            ? ''
+            : `<tr class="company-row"><td class="sticky-col" colspan="${span}">${esc(
+                label,
+              )}</td></tr>`;
+        last = label;
+        const key = keyOf(row);
+        const open = state.open === key;
+        return (
+          heading +
+          `<tr class="day-row can-open${open ? ' open' : ''}" data-row="${esc(
+            key,
+          )}" tabindex="0" role="button" aria-expanded="${open}">${cells(row)}</tr>` +
+          (open ? detailRow(row, span) : '')
+        );
+      })
+      .join('');
+  }
+
+  function planTable(rows: DemandRow[], isMaterial: boolean): string {
+    const span = isMaterial ? 12 : 11;
+
+    const cells = (row: DemandRow) => {
+      const open = state.open === keyOf(row);
+      return (
+        `<td class="sticky-col"><span class="disclose" aria-hidden="true">${
+          open ? '▾' : '▸'
+        }</span>${esc(isMaterial ? row.material : (row.slider ?? ''))}${
+          row.note ? `<span class="rmd-note" title="${esc(row.note)}">note</span>` : ''
+        }${
+          row.requiredFrom === 'sheet'
+            ? '<span class="rmd-note" title="Required is a sum across sibling rows in the sheet, so it cannot be recomputed here.">sheet</span>'
+            : ''
+        }</td>` +
+        (isMaterial ? `<td class="co">${esc(row.type ?? '')}</td>` : '') +
+        `<td class="num muted">${qty(row.demandTotal)}</td>` +
+        `<td class="num">${qty(row.required)}</td>` +
+        pairCell(row.consumption, row.consumptionValue, true) +
+        devCell(deviationOf(row)) +
+        `<td class="num muted">${qty(row.opIh)}</td>` +
+        pairCell(row.currentStock, row.currentStockValue) +
+        pairCell(row.git, row.gitValue) +
+        `<td class="num">${qty(row.totalAvailable)}</td>` +
+        availCell(row.availability)
+      );
+    };
+
+    const t = totalsOf(rows);
+    const dev = t.consumption - t.required;
+
+    const total = `<tr class="grand-row">
+      <td class="sticky-col" colspan="${isMaterial ? 2 : 1}">All ${qty(rows.length)} rows</td>
+      <td class="num"></td>
+      <td class="num">${qty(t.required)}</td>
+      ${pairCell(t.consumption, t.consumptionValue)}
+      ${devCell(dev)}
+      <td class="num"></td>
+      ${pairCell(t.currentStock, t.currentStockValue)}
+      ${pairCell(t.git, t.gitValue)}
+      <td class="num">${qty(t.totalAvailable)}</td>
+      ${availCell(t.required ? t.totalAvailable / t.required : null)}
+    </tr>`;
+
+    /*
+     * Two tiers, because the first figure is not in the same unit as the rest.
+     * Demand is finished zippers, in pieces; everything after it is the raw
+     * material that makes them, in the ledger's own units. Side by side with
+     * nothing to say so, 6,722,653 against 29,741 reads as an error rather
+     * than as pieces against grosses.
+     */
+    const materialUnit = isMaterial ? 'grosses' : 'pieces';
+
+    return `<table class="grid day-grid rmd-sheet">
+      <thead>
+        <tr>
+          <th class="sticky-col"></th>
+          ${isMaterial ? '<th></th>' : ''}
+          <th class="group-head">Zipper ordered · pcs</th>
+          <th class="group-head" colspan="3">Material this month · ${esc(materialUnit)}</th>
+          <th class="group-head" colspan="5">What is available · ${esc(materialUnit)}</th>
+        </tr>
+        <tr class="sub-row">
+          <th class="sticky-col">${isMaterial ? 'Material' : 'Slider'}</th>
+          ${isMaterial ? '<th class="text">Type</th>' : ''}
+          <th class="num">Demand</th>
+          <th class="num">Required</th>
+          <th class="num">Consumed</th>
+          <th class="num">Deviation</th>
+          <th class="num">OP + I/H</th>
+          <th class="num">Current stock</th>
+          <th class="num">GIT</th>
+          <th class="num">Total available</th>
+          <th class="num">Cover</th>
+        </tr>
+      </thead>
+      <tbody>${groupedRows(rows, cells, span)}${total}</tbody>
+    </table>`;
+  }
+
+  function liveTable(r: DemandReport): string {
+    if (!r.live.length) {
+      return '<div class="state"><h2>Nothing to show</h2><p>Odoo returned no ledger rows for the plan’s month.</p></div>';
+    }
+    const rows = r.live
+      .map(
+        (c) => `<tr>
+          <td class="sticky-col">${esc(c.category)}</td>
+          ${pairCell(c.consumption, c.consumptionValue, true)}
+          ${pairCell(c.currentStock, c.currentStockValue)}
+          ${pairCell(c.git, c.gitValue)}
+          <td class="num muted">${qty(c.gitLines)}</td>
+        </tr>`,
+      )
+      .join('');
+
+    return `<table class="grid day-grid rmd-sheet">
+      <thead>
+        <tr class="sub-row">
+          <th class="sticky-col">Item category</th>
+          <th class="num">Consumed</th>
+          <th class="num">Closing stock</th>
+          <th class="num">In transit</th>
+          <th class="num">Transit lines</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  function renderGrid(r: DemandReport) {
+    el.grid.innerHTML =
+      state.view === 'live' ? liveTable(r) : planTable(rowsOf(r), state.view === 'materials');
+
+    drawOpenHistory();
+
+    /*
+     * Both vocabularies are shown as they are, and the places they do not meet
+     * are named. Folding "Alm Wire" into METAL WIRE because it looks close
+     * would make the sheet tie out and the figures wrong.
+     */
+    const gaps: string[] = [];
+    if (state.view === 'live' && r.unmapped.length) {
+      gaps.push(
+        `${r.unmapped.length} categor${
+          r.unmapped.length === 1 ? 'y' : 'ies'
+        } here are not in the plan at all: ${r.unmapped.slice(0, 6).join(', ')}${
+          r.unmapped.length > 6 ? ', …' : ''
+        }.`,
+      );
+    }
+    if (state.view === 'materials' && r.unmatched.length) {
+      gaps.push(
+        `The plan's ${r.unmatched.join(
+          ', ',
+        )} has no item category of its own in the Zipper ledger, so it has no live figure to check against.`,
+      );
+    }
+    if (r.error) gaps.push(`Odoo: ${r.error}`);
+
+    el.note.textContent =
+      gaps.join(' ') ||
+      'Demand is finished zippers in pieces; every figure after it is the raw material that makes them, in the ledger’s own units — the two are not comparable. Required is the demand times the rate; consumed, stock and GIT are read from Odoo for the row’s own materials and zipper type.';
+  }
+
+  function renderControls() {
+    el.viewSeg.innerHTML = VIEWS.map(
+      (v) =>
+        `<button class="seg" type="button" role="tab" data-view="${v.key}" aria-selected="${
+          state.view === v.key
+        }">${esc(v.label)}</button>`,
+    ).join('');
+  }
+
+  function render() {
+    const r = state.report;
+    if (!r) return;
+    renderControls();
+    renderRail(r);
+    renderGrid(r);
+    el.status.hidden = true;
+    el.body.hidden = false;
+  }
+
+  /* ---------------------------------------------------------------- events */
+
+  function toggleRow(key: string) {
+    const r = state.report;
+    if (!r) return;
+    state.open = state.open === key ? null : key;
+    const row = rowsOf(r).find((x) => keyOf(x) === key);
+    if (state.open && row) void loadDetail(row);
+    renderGrid(r);
+  }
+
+  el.grid.addEventListener('click', (event) => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>('tr.day-row[data-row]');
+    if (row?.dataset.row) toggleRow(row.dataset.row);
+  });
+
+  el.grid.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const row = (event.target as HTMLElement).closest<HTMLElement>('tr.day-row[data-row]');
+    if (!row?.dataset.row) return;
+    event.preventDefault();
+    toggleRow(row.dataset.row);
+  });
+
+  el.viewSeg.addEventListener('click', (event) => {
+    const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-view]');
+    if (!btn) return;
+    state.view = btn.dataset.view as View;
+    // A different table has different rows, so nothing carries over.
+    state.open = null;
+    render();
+  });
+
+  let resizeTimer: number | undefined;
+  window.addEventListener('resize', () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(drawOpenHistory, 180);
+  });
+
+  if (root.dataset.odoo !== '1') {
+    el.status.innerHTML =
+      '<h2>Not connected</h2><p>Set the Odoo credentials in .env to check the plan against the ledger.</p>';
+  } else {
+    void load();
+  }
+}

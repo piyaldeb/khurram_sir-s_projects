@@ -1,0 +1,72 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+import { demandPlan } from '../lib/rmdemand';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+
+const monthLabel = new Date(`${demandPlan.month}-01T00:00:00Z`).toLocaleDateString('en-GB', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+---
+
+<Base title="Zipper RM demand · Odoo" connected={!!session} connectionLabel={connectionLabel}>
+  <main class="main rmd" data-odoo={session ? '1' : ''}>
+    <header class="page-head">
+      <div class="page-head-text">
+        <p class="eyebrow">Raw material · Zipper</p>
+        <h1>Demand vs consumption</h1>
+        <p class="lede">
+          What {monthLabel} required against what the plant actually burned, with the stock
+          behind it and what is still on the water.
+        </p>
+      </div>
+
+      <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Table" id="rmd-view"></div>
+      </div>
+    </header>
+
+    {
+      odooError && (
+        <div class="panel state error banner">
+          <h2>Odoo is not connected</h2>
+          <p>{odooError}</p>
+        </div>
+      )
+    }
+
+    <div class="panel state" id="rmd-status">
+      <h2><span class="spinner"></span> Reading the ledger</h2>
+      <p>The plan ships with the site; consumption, stock and GIT come from Odoo.</p>
+    </div>
+
+    <div class="day-layout" id="rmd-body" hidden>
+      <aside class="day-rail" id="rmd-rail"></aside>
+
+      <section class="day-main">
+        <div class="panel card day-card">
+          <div class="table-scroll" id="rmd-grid" style="max-height:none"></div>
+        </div>
+        <p class="hint" id="rmd-note"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="../scripts/rmdemand.ts"></script>
+</Base>

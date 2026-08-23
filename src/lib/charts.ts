@@ -157,15 +157,38 @@ export function barChart(opts: ChartOptions): string {
     // Only worth drawing while it is inside the plot; above the tallest tick it
     // would sit on the frame and say nothing.
     if (refY >= PAD.top && refY <= PAD.top + plotH) {
+      /*
+       * The label goes wherever the data is not. A fixed side works until the
+       * bars at that end happen to be tall, and then it prints on top of them —
+       * so both ends are measured and the quieter one wins.
+       */
+      const span = Math.max(Math.round(n * 0.18), 1);
+      const peak = (from: number, to: number) =>
+        Math.max(
+          ...categories
+            .slice(from, to)
+            .map((_, k) =>
+              series.reduce(
+                (a, sr) =>
+                  opts.stacked
+                    ? a + (sr.values[from + k] ?? 0)
+                    : Math.max(a, sr.values[from + k] ?? 0),
+                0,
+              ),
+            ),
+          0,
+        );
+      const onRight = peak(0, span) > peak(n - span, n);
+
       marks.push(
         `<line class="c-ref-line" x1="${PAD.left}" y1="${refY.toFixed(1)}" x2="${(
           PAD.left + plotW
         ).toFixed(1)}" y2="${refY.toFixed(1)}" />` +
-          // Left, just inside the axis: the right edge is where the newest and
-          // usually tallest bars are, and a label there sits on the data.
-          `<text class="c-ref-label" x="${(PAD.left + 4).toFixed(1)}" y="${(refY - 5).toFixed(
+          `<text class="c-ref-label" x="${(onRight ? PAD.left + plotW - 4 : PAD.left + 4).toFixed(
             1,
-          )}">${esc(opts.reference.label)}</text>`,
+          )}" y="${(refY - 5).toFixed(1)}"${
+            onRight ? ' text-anchor="end"' : ''
+          }>${esc(opts.reference.label)}</text>`,
       );
     }
   }

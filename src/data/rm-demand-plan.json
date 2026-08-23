@@ -1,0 +1,459 @@
+{
+  "month": "2026-08",
+  "company": "Zipper",
+  "source": "SC_ RM Demand Plan (1).xlsx · sheet \"Zip Demand Plan Aug\"",
+  "inferredGroups": {
+    "45": "Metal #4",
+    "5030": "Metal #4"
+  },
+  "materials": [
+    {
+      "ref": "45",
+      "group": "Metal #4",
+      "material": "Metal Wire",
+      "demand": {
+        "bd": 330453.0,
+        "export": 5522200.0,
+        "other": 870000.0
+      },
+      "demandTotal": 6722653.0,
+      "rate": 5.5,
+      "op": 21800.39,
+      "ih": 18144.0,
+      "cachedRequired": 29740.9355,
+      "type": "CE",
+      "effectiveRate": 0.0044239879
+    },
+    {
+      "ref": "45",
+      "group": "Metal #4",
+      "material": "Tape / Long Chain (GRS/n-GRS)",
+      "demand": {
+        "bd": 0.0,
+        "export": null,
+        "other": null
+      },
+      "demandTotal": 0,
+      "rate": 5.5,
+      "op": 11004.19,
+      "ih": 9375.0,
+      "cachedRequired": 14050.3448,
+      "type": "OE",
+      "effectiveRate": null,
+      "requiredFrom": "sheet"
+    },
+    {
+      "ref": "5030",
+      "group": "Metal #4",
+      "material": "Alm Wire",
+      "demand": {
+        "bd": 300000.0,
+        "export": null,
+        "other": null
+      },
+      "demandTotal": 300000.0,
+      "rate": 5.5,
+      "op": 561.0,
+      "ih": 0.0,
+      "cachedRequired": 1105.5,
+      "type": "CE",
+      "effectiveRate": 0.003685
+    },
+    {
+      "ref": "53",
+      "group": "Coil #3",
+      "material": "Tape / Long Chain",
+      "demand": {
+        "bd": 1411083.0,
+        "export": 6661000.0,
+        "other": 1050000.0
+      },
+      "demandTotal": 9122083.0,
+      "rate": 6.57,
+      "op": 18864.8,
+      "ih": 14500.0,
+      "cachedRequired": 34752.5026,
+      "type": "CE",
+      "effectiveRate": 0.0038097113
+    },
+    {
+      "ref": "58",
+      "group": "Coil #5",
+      "material": "Tape / Long Chain",
+      "demand": {
+        "bd": 6001.0,
+        "export": 180000.0,
+        "other": null
+      },
+      "demandTotal": 186001.0,
+      "rate": 8.81,
+      "op": 11752.8,
+      "ih": 3650.0,
+      "cachedRequired": 9683.575,
+      "type": "CE",
+      "effectiveRate": 0.0520619514
+    },
+    {
+      "ref": "62",
+      "group": "Metal #5",
+      "material": "Metal Wire",
+      "demand": {
+        "bd": 2105.0,
+        "export": 630000.0,
+        "other": null
+      },
+      "demandTotal": 632105.0,
+      "rate": 7.06,
+      "op": 2272.0,
+      "ih": 17572.0,
+      "cachedRequired": 10811.9226,
+      "type": "CE",
+      "effectiveRate": 0.0171046307
+    },
+    {
+      "ref": "62",
+      "group": "Metal #5",
+      "material": "Tape / Long Chain",
+      "demand": {
+        "bd": 74390.0,
+        "export": 197300.0,
+        "other": null
+      },
+      "demandTotal": 271690.0,
+      "rate": 23.64,
+      "op": 3046.29,
+      "ih": 7500.0,
+      "cachedRequired": 5785.7062,
+      "type": "OE",
+      "effectiveRate": 0.0212952489
+    },
+    {
+      "ref": "65",
+      "group": "Metal #5",
+      "material": "Alm Wire",
+      "demand": {
+        "bd": 13427.0,
+        "export": 117000.0,
+        "other": null
+      },
+      "demandTotal": 130427.0,
+      "rate": 23.64,
+      "op": 855.24,
+      "ih": 0.0,
+      "cachedRequired": 2466.6354,
+      "type": "OE",
+      "effectiveRate": 0.018912
+    },
+    {
+      "ref": "70",
+      "group": "Plastic #3",
+      "material": "Tape / Long Chain",
+      "demand": {
+        "bd": 9838.0,
+        "export": 0.0,
+        "other": null
+      },
+      "demandTotal": 9838.0,
+      "rate": 6.46,
+      "op": 1908.0,
+      "ih": 1000.0,
+      "cachedRequired": 702.8913,
+      "type": "CE",
+      "effectiveRate": 0.0714465602
+    },
+    {
+      "ref": "74",
+      "group": "Plastic #5",
+      "material": "Tape / Long Chain",
+      "demand": {
+        "bd": 0.0,
+        "export": 30000.0,
+        "other": null
+      },
+      "demandTotal": 30000.0,
+      "rate": 7.57,
+      "op": 3866.2,
+      "ih": 850.0,
+      "cachedRequired": 1816.5672,
+      "type": "CE",
+      "effectiveRate": 0.0605522413
+    },
+    {
+      "ref": "74",
+      "group": "Plastic #5",
+      "material": "POM",
+      "demand": {
+        "bd": 40267.0,
+        "export": 93000.0,
+        "other": null
+      },
+      "demandTotal": 133267.0,
+      "rate": 22.21,
+      "op": 425.0,
+      "ih": 1000.0,
+      "cachedRequired": 1000.0,
+      "type": "OE",
+      "effectiveRate": 0.0075037331
+    },
+    {
+      "ref": "78",
+      "group": "Plastic #5",
+      "material": "Tape / Long Chain",
+      "demand": {
+        "bd": 726022.0,
+        "export": 770000.0,
+        "other": null
+      },
+      "demandTotal": 1496022.0,
+      "rate": 9.52,
+      "op": 1540.77,
+      "ih": 2000.0,
+      "cachedRequired": 7121.0647,
+      "type": "CE",
+      "effectiveRate": 0.00476
+    },
+    {
+      "ref": "82",
+      "group": "Plastic #5",
+      "material": "Metal Wire",
+      "demand": {
+        "bd": 0.0,
+        "export": null,
+        "other": null
+      },
+      "demandTotal": 0,
+      "rate": 368.0,
+      "op": 250.2,
+      "ih": 1000.0,
+      "cachedRequired": 368.0,
+      "type": "CE",
+      "effectiveRate": null,
+      "requiredFrom": "sheet"
+    },
+    {
+      "ref": "82",
+      "group": "Plastic #5",
+      "material": "Tape / Long Chain",
+      "demand": {
+        "bd": 0.0,
+        "export": 10000.0,
+        "other": null
+      },
+      "demandTotal": 10000.0,
+      "rate": 23.0,
+      "op": 215.42,
+      "ih": 300.0,
+      "cachedRequired": 219.65,
+      "type": "OE",
+      "effectiveRate": 0.021965
+    }
+  ],
+  "sliders": [
+    {
+      "ref": "45",
+      "group": "Metal #4",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 196364.0,
+        "export": 2100000.0,
+        "other": 620000.0
+      },
+      "demandTotal": 2916364.0,
+      "rate": 2916364.0,
+      "op": 369308.0,
+      "ih": 4750000.0,
+      "cachedRequired": 2916364.0,
+      "slider": "TZP-305",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "45",
+      "group": "Metal #4",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 78466.0,
+        "export": 1350000.0,
+        "other": null
+      },
+      "demandTotal": 1428466.0,
+      "rate": 1428466.0,
+      "op": 251061.0,
+      "ih": 2315000.0,
+      "cachedRequired": 1428466.0,
+      "slider": "TZP-305 (N)",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "45",
+      "group": "Metal #4",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 0.0,
+        "export": 0.0,
+        "other": 0.0
+      },
+      "demandTotal": 0,
+      "rate": 0.0,
+      "op": 651898.0,
+      "ih": 0.0,
+      "cachedRequired": 0.0,
+      "slider": "TZP-373",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "45",
+      "group": "Metal #4",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 11184.0,
+        "export": 710000.0,
+        "other": 250000.0
+      },
+      "demandTotal": 971184.0,
+      "rate": 971184.0,
+      "op": 1083819.0,
+      "ih": 0.0,
+      "cachedRequired": 971184.0,
+      "slider": "TZP-294",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "45",
+      "group": "Metal #4",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 0.0,
+        "export": 300000.0,
+        "other": null
+      },
+      "demandTotal": 300000.0,
+      "rate": 300000.0,
+      "op": 0.0,
+      "ih": null,
+      "cachedRequired": 300000.0,
+      "note": "I/H Making slider",
+      "slider": "TZP-2115",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "45",
+      "group": "Metal #4",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 4946.0,
+        "export": 480000.0,
+        "other": null
+      },
+      "demandTotal": 484946.0,
+      "rate": 484946.0,
+      "op": 115504.0,
+      "ih": 500000.0,
+      "cachedRequired": 484946.0,
+      "slider": "TZP-331",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "53",
+      "group": "Coil #3",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 232862.0,
+        "export": 1544000.0,
+        "other": null
+      },
+      "demandTotal": 1776862.0,
+      "rate": 1776862.0,
+      "op": 1455139.0,
+      "ih": 0.0,
+      "cachedRequired": 1776862.0,
+      "note": "It will be counted I/H making from this month",
+      "slider": "TZP-684",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "53",
+      "group": "Coil #3",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 203700.0,
+        "export": 1285000.0,
+        "other": 350000.0
+      },
+      "demandTotal": 1838700.0,
+      "rate": 1838700.0,
+      "op": 934237.0,
+      "ih": 1500000.0,
+      "cachedRequired": 1838700.0,
+      "slider": "TZP-793",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "53",
+      "group": "Coil #3",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 99673.0,
+        "export": 1510000.0,
+        "other": 700000.0
+      },
+      "demandTotal": 2309673.0,
+      "rate": 2309673.0,
+      "op": 510320.0,
+      "ih": 2500000.0,
+      "cachedRequired": 2309673.0,
+      "slider": "TZP-794",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "53",
+      "group": "Coil #3",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 1129158.0,
+        "export": 1940000.0,
+        "other": null
+      },
+      "demandTotal": 3069158.0,
+      "rate": 3069158.0,
+      "op": 2998064.0,
+      "ih": 1750000.0,
+      "cachedRequired": 3069158.0,
+      "slider": "TZP-2239",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "66",
+      "group": "Metal #5",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 0.0,
+        "export": 200000.0,
+        "other": null
+      },
+      "demandTotal": 200000.0,
+      "rate": 200000.0,
+      "op": 236782.0,
+      "ih": 300000.0,
+      "cachedRequired": 200000.0,
+      "slider": "TZP-645",
+      "effectiveRate": 1.0
+    },
+    {
+      "ref": "78",
+      "group": "Plastic #5",
+      "material": "STI Slider",
+      "demand": {
+        "bd": 195751.0,
+        "export": 660000.0,
+        "other": null
+      },
+      "demandTotal": 855751.0,
+      "rate": 855751.0,
+      "op": 58418.0,
+      "ih": 395000.0,
+      "cachedRequired": 855751.0,
+      "slider": "TZP-1862",
+      "effectiveRate": 1.0
+    }
+  ]
+}

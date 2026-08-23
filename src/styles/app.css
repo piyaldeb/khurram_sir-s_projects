@@ -3985,3 +3985,201 @@ table.oa-sheet tbody tr.day-row.band-end > td {
   opacity: 0.45;
   cursor: default;
 }
+
+/* ------------------------------------------------ RM: the ledger, in the open */
+
+/*
+ * opening + received − consumed = closing. Consumption on its own is a number
+ * with no context — what was bought and what is left are what make it mean
+ * something — so the identity leads the page rather than hiding in a footnote.
+ *
+ * The signs carry the arithmetic, so the row reads as a sentence rather than
+ * as four unrelated tiles.
+ */
+.rm-ledger {
+  padding: 13px 16px;
+}
+
+.rm-ledger-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 6px;
+}
+
+.rm-step {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 2px 4px;
+}
+
+.rm-sign {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.rm-step-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.rm-step-figure {
+  font-size: 15px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.rm-step.in .rm-step-figure {
+  color: var(--good);
+}
+
+.rm-step.out .rm-step-figure {
+  color: var(--accent);
+}
+
+.rm-step.end .rm-step-figure {
+  font-size: 16px;
+}
+
+/* A restatement is neither a receipt nor an issue — it is the snapshot moving
+   under its own feet, so it reads as neither. */
+.rm-step.restated .rm-step-figure {
+  color: var(--ink-muted);
+}
+
+/* The check is the point of showing the identity at all: it has to be able to
+   say no. */
+.rm-check {
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+  color: var(--good);
+  font-size: 11.5px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+/* Restatement is a property of a monthly snapshot, not a fault, so it is a
+   note rather than an alarm. */
+.rm-check.note {
+  background: var(--surface-sunk);
+  color: var(--ink-2);
+}
+
+@media (max-width: 700px) {
+  .rm-ledger-row {
+    gap: 8px 14px;
+  }
+
+  .rm-check {
+    margin-left: 0;
+    flex-basis: 100%;
+    text-align: center;
+  }
+}
+
+/* --------------------------------------- RM demand: required against consumed */
+
+/*
+ * A deviation only means something with its direction attached, so the arrow
+ * and the colour say the same thing twice — colour alone would not survive a
+ * greyscale print or a red-green reader.
+ */
+.rmd-dev {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.rmd-dev.over {
+  color: var(--critical);
+}
+
+.rmd-dev.under {
+  color: var(--good);
+}
+
+/* A row that has a story attached to it in the sheet says so, quietly. */
+.rmd-note {
+  margin-left: 7px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: help;
+}
+
+.rmd-src {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The sheet's own material names run long; the key column wraps rather than
+   pushing the ten figure columns off the side. */
+table.rmd-sheet .sticky-col {
+  min-width: 190px;
+  white-space: normal;
+}
+
+/* A quantity with what it is worth underneath it — the unit belongs to the
+   ledger and carries no symbol; money always does. */
+.rmd-qty {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.rmd-val {
+  display: block;
+  margin-top: 1px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.rmd-code,
+.rmd-unit {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+.rmd-items li {
+  grid-template-columns: minmax(0, 1fr) 96px 72px;
+}
+
+/* The shipment table is eight columns of detail; it scrolls rather than
+   squeezing the dates until they wrap. */
+.rmd-ship-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+table.rmd-ship {
+  min-width: 720px;
+}
+
+table.rmd-ship td.mono {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.rmd-history {
+  margin: 4px 0 16px;
+}

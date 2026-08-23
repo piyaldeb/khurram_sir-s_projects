@@ -1,0 +1,84 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+---
+
+<Base title="RM consumption · Odoo" connected={!!session} connectionLabel={connectionLabel}>
+  <main class="main rm" data-odoo={session ? '1' : ''}>
+    <header class="page-head">
+      <div class="page-head-text">
+        <p class="eyebrow">Raw material</p>
+        <h1>RM consumption history</h1>
+        <p class="lede">
+          What the plant has burned, by product category and by company — Odoo's monthly raw
+          material ledger, every month it holds. Open a category for its own history.
+        </p>
+      </div>
+
+      <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Company" id="rm-company"></div>
+        <div class="segmented" role="tablist" aria-label="Period" id="rm-period"></div>
+        <select class="oa-month-pick" id="rm-month" aria-label="Month"></select>
+      </div>
+    </header>
+
+    {
+      odooError && (
+        <div class="panel state error banner">
+          <h2>Odoo is not connected</h2>
+          <p>{odooError}</p>
+        </div>
+      )
+    }
+
+    <div class="panel state" id="rm-status">
+      <h2><span class="spinner"></span> Reading the ledger</h2>
+      <p>
+        Odoo groups five years of raw material movement for this — a few seconds the first
+        time, then it is cached.
+      </p>
+    </div>
+
+    <div class="day-layout" id="rm-body" hidden>
+      <!-- The rail carries the judgment; the sheet carries every category. -->
+      <aside class="day-rail" id="rm-rail"></aside>
+
+      <section class="day-main">
+        <!-- opening + received - consumed = closing, said in the open. -->
+        <div class="panel card rm-ledger" id="rm-ledger"></div>
+
+        <section class="panel card" style="margin-top:16px">
+          <div class="card-head">
+            <h2>Consumed, month by month</h2>
+            <span class="hint" id="rm-trend-note"></span>
+          </div>
+          <div class="chart-host" id="rm-trend"></div>
+        </section>
+
+        <div class="chips-bar panel" id="rm-chips" style="margin-top:16px"></div>
+
+        <div class="panel card day-card">
+          <div class="table-scroll" id="rm-grid" style="max-height:none"></div>
+        </div>
+        <p class="hint" id="rm-note"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="../scripts/rmconsumption.ts"></script>
+</Base>
