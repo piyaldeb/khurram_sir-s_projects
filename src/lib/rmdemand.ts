@@ -206,8 +206,11 @@ export interface DemandRow {
   requiredFrom: 'formula' | 'unavailable';
 
   op: number | null;
+  opValue: number | null;
   ih: number | null;
+  ihValue: number | null;
   opIh: number | null;
+  opIhValue: number | null;
 
   consumption: number | null;
   consumptionValue: number | null;
@@ -294,6 +297,10 @@ function unitCostOf(
 /** A cell of the live grid: one material category crossed with one zipper type. */
 interface Cell {
   opening: number;
+  openingValue: number;
+  /** Goods actually taken into the house this month — the sheet's I/H. */
+  received: number;
+  receivedValue: number;
   consumption: number;
   consumptionValue: number;
   currentStock: number;
@@ -306,6 +313,9 @@ interface Cell {
 
 const emptyCell = (): Cell => ({
   opening: 0,
+  openingValue: 0,
+  received: 0,
+  receivedValue: 0,
   consumption: 0,
   consumptionValue: 0,
   currentStock: 0,
@@ -423,7 +433,16 @@ export async function demandReport(wanted?: string): Promise<DemandReport> {
       callKw<any[]>(LEDGER_MODEL, 'read_group', {
         args: [
           [['company_id', '=', ZIPPER], ['month', '>=', from], ['month', '<', to]],
-          ['opening_qty', 'issue_qty', 'issue_value', 'cloing_qty', 'cloing_value'],
+          [
+            'opening_qty',
+            'opening_value',
+            'receive_qty',
+            'receive_value',
+            'issue_qty',
+            'issue_value',
+            'cloing_qty',
+            'cloing_value',
+          ],
           ['item_category', 'product_name'],
         ],
         kwargs: { context, lazy: false, limit: 0 },
@@ -542,6 +561,9 @@ export async function demandReport(wanted?: string): Promise<DemandReport> {
       const roll = categoryAt(cat);
 
       target.opening += num(row.opening_qty);
+      target.openingValue += num(row.opening_value);
+      target.received += num(row.receive_qty);
+      target.receivedValue += num(row.receive_value);
       target.consumption += -num(row.issue_qty);
       target.consumptionValue += -num(row.issue_value);
       target.currentStock += num(row.cloing_qty);
@@ -582,7 +604,8 @@ export async function demandReport(wanted?: string): Promise<DemandReport> {
       for (const cell of grid.values()) {
         cell.consumption = 0;
         cell.consumptionValue = 0;
-        cell.opening = 0;
+        cell.received = 0;
+        cell.receivedValue = 0;
       }
       for (const roll of byCategory.values()) {
         roll.consumption = 0;
@@ -650,8 +673,25 @@ export async function demandReport(wanted?: string): Promise<DemandReport> {
       const currentStock = sum((c) => c.currentStock);
       const currentStockValue = sum((c) => c.currentStockValue);
       const git = sum((c) => c.git);
-      const op = sum((c) => c.opening);
-      const ih = sum((c) => c.ih);
+      /*
+       * A month that has not started opens on the last position that exists,
+       * which is the stock month's CLOSING rather than its opening.
+       */
+      const op = projected ? sum((c) => c.currentStock) : sum((c) => c.opening);
+      const opValue = projected
+        ? sum((c) => c.currentStockValue)
+        : sum((c) => c.openingValue);
+      /*
+       * I/H is In-House: what was actually taken into the factory this month.
+       * The sheet proves it — it computes current stock as (OP + I/H) minus
+       * consumption, and the ledger's own identity is opening + received minus
+       * issued. Both give 20,115 kg for Metal #4 wire in August, so I/H is
+       * `receive_qty` and nothing else. A month that has not happened has
+       * received nothing yet, and what is coming is already the GIT column, so
+       * repeating it here would count the same shipment twice.
+       */
+      const ih = projected ? null : sum((c) => c.received);
+      const ihValue = projected ? null : sum((c) => c.receivedValue);
       const totalAvailable =
         currentStock === null && git === null ? null : (currentStock ?? 0) + (git ?? 0);
 
@@ -679,8 +719,12 @@ export async function demandReport(wanted?: string): Promise<DemandReport> {
         costBasis: cost.basis,
         requiredFrom: 'formula' as const,
         op,
+        opValue,
         ih,
+        ihValue,
         opIh: op === null && ih === null ? null : (op ?? 0) + (ih ?? 0),
+        opIhValue:
+          opValue === null && ihValue === null ? null : (opValue ?? 0) + (ihValue ?? 0),
         consumption,
         consumptionValue,
         currentStock,
@@ -774,7 +818,14 @@ async function sliderRows(
           ['month', '>=', from],
           ['month', '<', to],
         ],
-        ['opening_qty', 'issue_qty', 'issue_value', 'cloing_qty', 'cloing_value'],
+        [
+          'opening_qty',
+          'opening_value',
+          'issue_qty',
+          'issue_value',
+          'cloing_qty',
+          'cloing_value',
+        ],
         ['product_id'],
       ],
       kwargs: { context, lazy: false, limit: 0 },
@@ -804,6 +855,7 @@ async function sliderRows(
     if (id === null) continue;
     const c = at(id);
     c.opening += num(row.opening_qty);
+    c.openingValue += num(row.opening_value);
     c.consumption += -num(row.issue_qty);
     c.consumptionValue += -num(row.issue_value);
     c.currentStock += num(row.cloing_qty);
@@ -846,8 +898,11 @@ async function sliderRows(
       costBasis: cost.basis,
       requiredFrom: 'unavailable' as const,
       op: sum((c) => c.opening),
+      opValue: sum((c) => c.openingValue),
       ih: null,
+      ihValue: null,
       opIh: sum((c) => c.opening),
+      opIhValue: sum((c) => c.openingValue),
       consumption,
       consumptionValue,
       currentStock,

@@ -40,8 +40,11 @@ interface DemandRow {
   costBasis: 'consumed' | 'stock' | 'trailing' | null;
   requiredFrom: 'formula' | 'unavailable';
   op: number | null;
+  opValue: number | null;
   ih: number | null;
+  ihValue: number | null;
   opIh: number | null;
+  opIhValue: number | null;
   consumption: number | null;
   consumptionValue: number | null;
   currentStock: number | null;
@@ -515,8 +518,12 @@ if (root) {
               }`,
             )
       }
-      ${stat('Opening', qty(row.op), row.unit ?? '')}
-      ${row.ih === null ? '' : stat('In-house this month', qty(row.ih), row.unit ?? '')}
+      ${stat('Opening', usd(row.opValue), `${qty(row.op)} ${row.unit ?? ''}`.trim())}
+      ${
+        row.ih === null
+          ? ''
+          : stat('In-housed', usd(row.ihValue), `${qty(row.ih)} ${row.unit ?? ''}`.trim())
+      }
     </div>`;
 
     const head = `<div class="oa-detail-head">
@@ -683,7 +690,7 @@ if (root) {
           : pairCell(row.requiredValue, row.required)) +
         pairCell(row.consumptionValue, row.consumption, true) +
         devCell(deviationOf(row)) +
-        `<td class="num muted">${qty(row.opIh)}</td>` +
+        pairCell(row.opIhValue, row.opIh) +
         pairCell(row.currentStockValue, row.currentStock) +
         pairCell(row.gitValue, row.git) +
         pairCell(
@@ -740,7 +747,7 @@ if (root) {
           <th class="num">Required $</th>
           <th class="num">Consumed $</th>
           <th class="num">Deviation $</th>
-          <th class="num">OP + I/H</th>
+          <th class="num">OP + I/H $</th>
           <th class="num">Current stock $</th>
           <th class="num">GIT $</th>
           <th class="num">Total available $</th>
