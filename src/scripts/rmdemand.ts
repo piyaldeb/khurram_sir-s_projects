@@ -145,13 +145,16 @@ if (root) {
     grid: $<HTMLElement>('#rmd-grid'),
     note: $<HTMLElement>('#rmd-note'),
     viewSeg: $<HTMLElement>('#rmd-view'),
+    fySeg: $<HTMLElement>('#rmd-fy'),
     monthPick: $<HTMLSelectElement>('#rmd-month'),
   };
 
   const state = {
     view: 'materials' as View,
-    /** '' means whichever month Odoo's forecast reaches furthest into. */
+    /** '' means whichever month the server picks — the last settled one. */
     month: '',
+    /** The fiscal year the month picker is scoped to; '' until the first load. */
+    fy: '',
     open: null as string | null,
     report: null as DemandReport | null,
     detail: new Map<string, RowDetail | 'loading'>(),
@@ -186,6 +189,13 @@ if (root) {
       /[&<>"]/g,
       (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!,
     );
+
+  /** April to March, the way the plant counts a year. */
+  const fyOf = (month: string) => {
+    const [y, m] = month.split('-').map(Number);
+    return m >= 4 ? y : y - 1;
+  };
+  const fyLabel = (fy: number) => `FY ${String(fy).slice(2)}-${String(fy + 1).slice(2)}`;
 
   const monthShort = (iso: string) =>
     new Date(`${iso}-01T00:00:00Z`).toLocaleDateString('en-GB', {
@@ -797,17 +807,35 @@ if (root) {
     ).join('');
 
     /*
-     * Every month Odoo holds a forecast for. The page opens on the furthest,
-     * which is what makes it roll forward on its own: when the sales team
-     * enters next month, this follows without anyone touching the site.
+     * The fiscal year picks the shelf; the month picks off it. Sixteen months
+     * in one select is a list you have to read; four years and five months is
+     * two glances.
+     *
+     * The year follows the month whenever the server chose it, so the controls
+     * always agree with the sheet underneath them.
      */
-    el.monthPick.innerHTML = [...r.months]
-      .reverse()
+    const fys = [...new Set(r.months.map(fyOf))].sort((a, b) => b - a);
+    const fy = state.fy && fys.includes(Number(state.fy)) ? Number(state.fy) : fyOf(r.month);
+    state.fy = String(fy);
+
+    el.fySeg.innerHTML = fys
       .map(
-        (m) => `<option value="${m}"${m === r.month ? ' selected' : ''}>${esc(monthLong(m))}</option>`,
+        (y) =>
+          `<button class="seg" type="button" role="tab" data-fy="${y}" aria-selected="${
+            y === fy
+          }">${esc(fyLabel(y))}</button>`,
       )
       .join('');
-    el.monthPick.disabled = r.months.length < 2;
+
+    const inYear = r.months.filter((m) => fyOf(m) === fy);
+    el.monthPick.innerHTML = [...inYear]
+      .reverse()
+      .map(
+        (m) =>
+          `<option value="${m}"${m === r.month ? ' selected' : ''}>${esc(monthLong(m))}</option>`,
+      )
+      .join('');
+    el.monthPick.disabled = inYear.length < 2;
   }
 
   function render() {
@@ -842,6 +870,20 @@ if (root) {
     if (!row?.dataset.row) return;
     event.preventDefault();
     toggleRow(row.dataset.row);
+  });
+
+  el.fySeg.addEventListener('click', (event) => {
+    const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-fy]');
+    if (!btn || btn.dataset.fy === state.fy) return;
+    state.fy = btn.dataset.fy!;
+
+    // Land on the latest month of that year that the forecast actually has,
+    // so switching year never lands on an empty sheet.
+    const inYear = (state.report?.months ?? []).filter((m) => String(fyOf(m)) === state.fy);
+    state.month = inYear.at(-1) ?? '';
+    state.open = null;
+    state.detail.clear();
+    void load();
   });
 
   el.monthPick.addEventListener('change', () => {
