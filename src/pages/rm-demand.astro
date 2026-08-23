@@ -1,7 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import { config, getSession } from '../lib/odoo';
-import { demandPlan } from '../lib/rmdemand';
+
 
 export const prerender = false;
 
@@ -18,11 +18,6 @@ const connectionLabel = session
   ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
   : 'Not connected';
 
-const monthLabel = new Date(`${demandPlan.month}-01T00:00:00Z`).toLocaleDateString('en-GB', {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
 ---
 
 <Base title="Zipper RM demand · Odoo" connected={!!session} connectionLabel={connectionLabel}>
@@ -32,13 +27,14 @@ const monthLabel = new Date(`${demandPlan.month}-01T00:00:00Z`).toLocaleDateStri
         <p class="eyebrow">Raw material · Zipper</p>
         <h1>Demand vs consumption</h1>
         <p class="lede">
-          What {monthLabel} required against what the plant actually burned, with the stock
-          behind it and what is still on the water.
+          What the month required against what the plant actually burned, with the stock behind
+          it and what is still on the water — every figure read from Odoo.
         </p>
       </div>
 
       <div class="page-head-actions">
         <div class="segmented" role="tablist" aria-label="Table" id="rmd-view"></div>
+        <select class="oa-month-pick" id="rmd-month" aria-label="Month"></select>
       </div>
     </header>
 

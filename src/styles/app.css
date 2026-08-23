@@ -4183,3 +4183,48 @@ table.rmd-ship td.mono {
 .rmd-history {
   margin: 4px 0 16px;
 }
+
+/* The unit belongs to the row, not to the column: the ledger counts wire and
+   tape in kg and sliders in pieces, so no header can speak for both. */
+.rmd-unit-tag {
+  margin-left: 7px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* The requirement is worked out rather than read, so the row shows its working. */
+.rmd-working {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+  margin: 10px 0 2px;
+  padding: 8px 11px;
+  border-radius: 6px;
+  background: var(--surface-sunk);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.rmd-working-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rmd-term {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.rmd-plus {
+  color: var(--ink-muted);
+}

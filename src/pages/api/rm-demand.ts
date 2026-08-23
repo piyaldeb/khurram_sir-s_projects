@@ -4,6 +4,8 @@ import { demandReport, rowDetail } from '~/lib/rmdemand';
 
 export const prerender = false;
 
+const MONTH = /^\d{4}-\d{2}$/;
+
 /**
  * The Zipper RM demand plan against Odoo.
  *
@@ -19,9 +21,13 @@ export const GET: APIRoute = async ({ url }) => {
       if (kind !== 'material' && kind !== 'slider') {
         return json({ error: 'kind must be "material" or "slider"' }, 400);
       }
-      return json(await rowDetail(kind, row, url.searchParams.get('group') || undefined));
+      const month = url.searchParams.get('month') ?? '';
+      if (!MONTH.test(month)) return json({ error: 'month must look like 2026-08' }, 400);
+      return json(
+        await rowDetail(kind, row, month, url.searchParams.get('group') || undefined),
+      );
     }
-    return json(await demandReport());
+    return json(await demandReport(url.searchParams.get('month') || undefined));
   } catch (err) {
     const message = err instanceof OdooError ? err.message : (err as Error).message;
     return json({ error: message }, 502);

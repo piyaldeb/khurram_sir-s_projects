@@ -1,89 +1,105 @@
 /**
  * Zipper RM demand plan — required against consumed, with what is on the water.
  *
- * The sheet this replaces is `SC_ RM Demand Plan (1).xlsx`, tab "Zip Demand
- * Plan Aug". What ships with the site is that sheet's INPUTS, not its answers:
- * the month's demand per zipper type, the per-unit rate, and the two
- * hand-entered stock columns. Everything the sheet works out, this works out
- * again; everything Odoo knows, this reads from Odoo.
+ * This replaces `SC_ RM Demand Plan (1).xlsx`, tab "Zip Demand Plan Aug". The
+ * only thing taken from that workbook is its FORMULA, which ships as
+ * `src/data/rm-demand-formula.json`. Every quantity is read from Odoo, so the
+ * report rolls to next month on its own without anyone re-extracting a sheet.
  *
- * The sheet's arithmetic, verified cell by cell against its cached values:
+ *   demand    rolling.forecast.line       by fg category, for the month
+ *   required  the formula, over that demand
+ *   opening   rm.stock.detailed.monthly   opening_qty
+ *   consumed  rm.stock.detailed.monthly   issue_qty, sign-flipped
+ *   stock     rm.stock.detailed.monthly   cloing_qty
+ *   in-house  transit.line                where the shipment lands in the month
+ *   GIT       transit.line                still on the water, whenever it ships
  *
- *   demand   = BD + Export + other
- *   required = demand x (rate x material factor) / 1000
- *   total    = stock + GIT
- *   coverage = total / required
+ * THE FORMULA
+ * -----------
+ *   required = SUM over terms of
+ *                ( SUM over the term's categories of demand x that category's rate )
+ *                x factor / 1000
  *
- * Row 7 checks out at 7,022,653 x (5.5 x 0.77) / 1000 = 29,740.94 against a
- * cached 29,740.93546, and every other row recomputes exactly. Two rows draw
- * their requirement from a SUM across sibling rows instead of their own demand;
- * those carry the sheet's figure and say so through `requiredFrom`.
+ * Each zipper category carries its own rate; each material row a factor and the
+ * categories it draws from. Recovered from the sheet cell by cell and exact:
+ * Metal #5 metal wire is (632,105 x 7.06 + 271,690 x 23.64 + 20,892 x 23.72)
+ * x 0.95 / 1000 = 10,811.9 against the sheet's 10,811.92258.
  *
- * WHY THE REQUIREMENT IS NOT READ FROM ODOO
- * -----------------------------------------
- * Odoo has the model — `rm.demand.availability.dashboard` — and this login is
- * denied access to it, as it is to `sc.rm.demand.plan.dashboard`. The hand-entry
- * table behind them holds one Zipper row and it is empty. `rolling.forecast.line`
- * is readable but is the FG sales forecast in pieces, and converting it needs
- * the same rate the sheet keeps in its own column. Grant this login read access
- * to that dashboard and the requirement comes live; nothing else changes.
+ * It reads oddly at a glance — 6.7 million zippers needing only 29,741 — until
+ * the unit lands: that is 5.5 x 0.77 / 1000 = 4.2 grams of brass wire each, and
+ * the ledger counts wire in kg.
  *
- * WHAT IS LIVE
- * ------------
- *   rm.stock.detailed.monthly   consumption (issue, sign-flipped) and closing
- *                               stock, in quantity and in USD
- *   transit.line                what is still on the water, not yet in-housed
+ * WHAT IS NOT HERE
+ * ----------------
+ * The sheet's STI slider block sets each slider's requirement by hand, and no
+ * readable Odoo model carries it — `demand.plan.slider` lists which sliders
+ * matter, not how many are wanted. So the slider table shows what Odoo does
+ * know, per slider, and says the requirement is missing rather than inventing
+ * one. Odoo's own `rm.demand.availability.dashboard` would supply it, and this
+ * login is denied access to that model.
  */
 import { buildContext, callKw, getSession } from './odoo';
-import plan from '../data/rm-demand-plan.json';
+import formula from '../data/rm-demand-formula.json';
 
 /** The plan is Zipper only, which is what the report is for. */
 const ZIPPER = 1;
 
 const LEDGER_MODEL = 'rm.stock.detailed.monthly';
 const TRANSIT_MODEL = 'transit.line';
+const FORECAST_MODEL = 'rolling.forecast.line';
+const SLIDER_MODEL = 'demand.plan.slider';
 
 /** Transit states that still count as on the water rather than received. */
 const IN_TRANSIT = ['logistics', 'in_transit'];
 
-/* ---------------------------------------------------------------- the plan */
+/**
+ * Forecast lines firm enough to plan material against.
+ *
+ * Approved alone understates badly — a third of August — because much of the
+ * book is still awaiting approval when the material has to be ordered. Draft
+ * and cancelled are excluded.
+ */
+const FORECAST_STATES = ['approved', 'to approve'];
 
-export interface PlanInput {
-  ref: string;
+/** Everything outside Bangladesh is the sheet's Export column. */
+const EXPORT_REGION = 'OVERSEAS';
+
+/* ------------------------------------------------------------- the formula */
+
+export interface FormulaCategory {
+  key: string;
   group: string;
-  material: string;
-  demand: { bd: number | null; export: number | null; other: number | null };
-  demandTotal: number;
-  /** The sheet's own per-unit factor, its column H. */
-  rate: number | null;
-  /** rate x material factor / 1000 — what the demand is multiplied by. */
-  effectiveRate: number | null;
-  op: number | null;
-  ih: number | null;
-  /** The sheet's own answer, kept only so any divergence can be shown. */
-  cachedRequired: number;
-  requiredFrom?: 'sheet';
-  note?: string;
-  type?: string;
-  slider?: string;
+  type: string;
+  rate: number;
 }
 
-export interface DemandPlan {
-  month: string;
+export interface FormulaTerm {
+  categories: string[];
+  factor: number;
+}
+
+export interface FormulaRow {
+  group: string;
+  type: string;
+  material: string;
+  terms: FormulaTerm[];
+}
+
+export interface DemandFormula {
   company: string;
   source: string;
-  inferredGroups: Record<string, string>;
-  materials: PlanInput[];
-  sliders: PlanInput[];
+  note: string;
+  categories: FormulaCategory[];
+  rows: FormulaRow[];
 }
 
-export const demandPlan = plan as DemandPlan;
+export const demandFormula = formula as DemandFormula;
 
 /**
  * The sheet's material names against Odoo's item categories.
  *
  * Two vocabularies, and the mapping is deliberately partial. "Tape / Long
- * Chain" is one line in the sheet and two categories in Odoo, so it maps to
+ * Chain" is one line in the formula and two categories in Odoo, so it maps to
  * both. "Alm Wire" — aluminium wire — has no category of its own in the Zipper
  * ledger, so it maps to nothing and the report says so rather than quietly
  * folding it into METAL WIRE.
@@ -91,7 +107,6 @@ export const demandPlan = plan as DemandPlan;
 export const MATERIAL_CATEGORIES: Record<string, string[]> = {
   'Metal Wire': ['METAL WIRE'],
   'Tape / Long Chain': ['TAPE', 'LONG CHAIN'],
-  'Tape / Long Chain (GRS/n-GRS)': ['TAPE', 'LONG CHAIN'],
   POM: ['POM'],
   'STI Slider': ['SLIDER'],
 };
@@ -101,13 +116,16 @@ export const MATERIAL_CATEGORIES: Record<string, string[]> = {
  *
  * The ledger has no zipper-type dimension, but it does not need one: the
  * products name themselves. "M#4 BRASS WIRE DN+" and "M#5 BRASS WIRE DN+" are
- * both METAL WIRE and belong to different rows of the plan, and their names are
- * the only thing that tells them apart. Coil is written N# as often as C#.
+ * both METAL WIRE and belong to different rows, and their names are the only
+ * thing that tells them apart. Coil is written N# as often as C#.
  */
 export const GROUP_TOKENS: [string, RegExp][] = [
   ['Metal #4', /\bM#4(?:\.5)?\b/i],
   ['Metal #5', /\bM#5\b/i],
   ['Metal #8', /\bM#8\b/i],
+  ['Aluminium #4', /\bAL#4\b/i],
+  ['Aluminium #5', /\bAL#5\b/i],
+  ['Invisible #3', /\bINV#3\b/i],
   ['Coil #3', /\b[NC]#3\b/i],
   ['Coil #5', /\b[NC]#5\b/i],
   ['Coil #8', /\b[NC]#8\b/i],
@@ -115,7 +133,7 @@ export const GROUP_TOKENS: [string, RegExp][] = [
   ['Plastic #5', /\bP#5\b/i],
 ];
 
-/** Which plan group a product name belongs to, or null when it says nothing. */
+/** Which group a product name belongs to, or null when it says nothing. */
 export function groupOf(productName: string): string | null {
   return GROUP_TOKENS.find(([, re]) => re.test(productName))?.[0] ?? null;
 }
@@ -133,8 +151,21 @@ export function tzpCodes(productName: string): number[] {
 
 /* ------------------------------------------------------------- the results */
 
+export interface CategoryDemand {
+  key: string;
+  group: string;
+  type: string;
+  rate: number;
+  bd: number;
+  export: number;
+  total: number;
+  /** What the order book is worth, from the forecast's own pricing. */
+  value: number;
+}
+
 export interface LiveCategory {
   category: string;
+  unit: string | null;
   consumption: number;
   consumptionValue: number;
   currentStock: number;
@@ -144,28 +175,35 @@ export interface LiveCategory {
   gitLines: number;
 }
 
-/**
- * One row of the plan, computed.
- *
- * Nothing here is copied from the sheet's answer columns: `required` is demand
- * times rate, consumption and stock and GIT are read from Odoo for the row's
- * own materials and zipper type, and the rest is arithmetic over those.
- */
 export interface DemandRow {
-  ref: string;
   group: string;
-  material: string;
   type: string | null;
+  material: string;
   slider: string | null;
-  note: string | null;
 
-  demand: { bd: number | null; export: number | null; other: number | null };
-  demandTotal: number;
-  rate: number | null;
-  effectiveRate: number | null;
+  /** The categories whose demand feeds this row, and what they contribute. */
+  from: { key: string; demand: number; rate: number; factor: number }[];
+  demandBd: number | null;
+  demandExport: number | null;
+  demandTotal: number | null;
+  /** The order book in money, so the demand reads like every other column. */
+  demandValue: number | null;
 
-  required: number;
-  requiredFrom: 'computed' | 'sheet';
+  required: number | null;
+  /**
+   * The requirement in money, priced at what the ledger actually paid.
+   *
+   * The formula works in the material's own unit; the page reads in money. The
+   * rate comes from the ledger itself — value over quantity for what moved this
+   * month, falling back to what is sitting in stock when nothing moved — so it
+   * is the plant's own cost, not a list price from somewhere else.
+   */
+  requiredValue: number | null;
+  /** What one unit cost, and which side of the ledger that came from. */
+  unitCost: number | null;
+  costBasis: 'consumed' | 'stock' | 'trailing' | null;
+  /** Null when no readable Odoo model carries the requirement. */
+  requiredFrom: 'formula' | 'unavailable';
 
   op: number | null;
   ih: number | null;
@@ -182,54 +220,36 @@ export interface DemandRow {
   totalAvailable: number | null;
   availability: number | null;
 
-  /** The sheet's own (op + ih) - consumption, for comparison only. */
-  sheetStock: number | null;
-  /** What the live figures were read from. */
+  /** What this row is counted in — kg for wire and tape, Pcs for sliders. */
+  unit: string | null;
   matchedOn: string[];
 }
 
 export interface DemandReport {
   month: string;
+  /** Every month a forecast exists for, so the page can move between them. */
+  months: string[];
   company: string;
   source: string;
+  demand: CategoryDemand[];
   materials: DemandRow[];
   sliders: DemandRow[];
   live: LiveCategory[];
-  /** Categories the plan's materials never mention. */
   unmapped: string[];
-  /** Plan materials with no Odoo category behind them. */
   unmatched: string[];
   fetchedAt: string;
   error?: string;
 }
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
-const idOf = (v: unknown) => (Array.isArray(v) ? (v[0] as number) : null);
 const nameOf = (v: unknown) => (Array.isArray(v) ? String(v[1] ?? '').trim() : '');
 const round = (v: number) => Math.round(v * 100) / 100;
 
-/**
- * Item categories resolved to ids, once.
- *
- * Filtering on `item_category.display_name` looks like it works and does not:
- * `display_name` is computed, not stored, so Odoo cannot push the comparison
- * into SQL and the domain silently matches far more than it should — asking for
- * METAL WIRE came back with sliders, pin boxes and 20 million units against the
- * 26 thousand the grouped read gives. Ids are the only safe key.
- */
-let categoryIds: Promise<Map<string, number>> | null = null;
-
-function itemCategories(context: Record<string, unknown>): Promise<Map<string, number>> {
-  categoryIds ??= callKw<any[]>('category.type', 'search_read', {
-    args: [[], ['name']],
-    kwargs: { context, limit: 0 },
-  })
-    .then((rows) => new Map(rows.map((r) => [String(r.name ?? '').trim().toUpperCase(), r.id])))
-    .catch((err) => {
-      categoryIds = null;
-      throw err;
-    });
-  return categoryIds;
+/** The first of the month `back` months before `month`. */
+function monthsBack(month: string, back: number): string {
+  const [y, m] = month.split('-').map(Number);
+  const total = y * 12 + (m - 1) - back;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}-01`;
 }
 
 /** The month as Odoo's `month` date column bounds it. */
@@ -239,8 +259,30 @@ function monthBounds(month: string): [string, string] {
   return [`${month}-01`, next];
 }
 
+/**
+ * What one unit of a material costs, read off the ledger.
+ *
+ * What moved this month is the better answer, because it is what the plant
+ * actually paid to consume. When nothing moved, the stock sitting there still
+ * has a value and a quantity, and that is the next best thing. When there is
+ * neither, there is no honest rate and the money column stays empty.
+ */
+function unitCostOf(
+  qty: number | null,
+  value: number | null,
+  stockQty: number | null,
+  stockValue: number | null,
+  trailing: number | null = null,
+): { rate: number | null; basis: 'consumed' | 'stock' | 'trailing' | null } {
+  if (qty && value) return { rate: value / qty, basis: 'consumed' };
+  if (stockQty && stockValue) return { rate: stockValue / stockQty, basis: 'stock' };
+  if (trailing) return { rate: trailing, basis: 'trailing' };
+  return { rate: null, basis: null };
+}
+
 /** A cell of the live grid: one material category crossed with one zipper type. */
 interface Cell {
+  opening: number;
   consumption: number;
   consumptionValue: number;
   currentStock: number;
@@ -248,9 +290,11 @@ interface Cell {
   git: number;
   gitValue: number;
   gitLines: number;
+  ih: number;
 }
 
 const emptyCell = (): Cell => ({
+  opening: 0,
   consumption: 0,
   consumptionValue: 0,
   currentStock: 0,
@@ -258,23 +302,50 @@ const emptyCell = (): Cell => ({
   git: 0,
   gitValue: 0,
   gitLines: 0,
+  ih: 0,
 });
 
 const cellKey = (group: string | null, category: string) => `${group ?? '?'}|${category}`;
 
-/**
- * The plan's month, computed against Odoo.
- *
- * Two grouped reads build a grid of item category x zipper type, and each plan
- * row takes the cells its own materials and group point at. GIT is deliberately
- * NOT scoped to the month: goods in transit are a position, not a flow — what
- * matters is what is on the water now, whichever month it shipped in.
- */
-export async function demandReport(): Promise<DemandReport> {
+/* ------------------------------------------------------------------ report */
+
+export async function demandReport(wanted?: string): Promise<DemandReport> {
+  const context = buildContext(await getSession());
+
+  // Which months the forecast covers. The page opens on the latest, which is
+  // what makes the report roll forward without anyone touching it.
+  const monthRows = await callKw<any[]>(FORECAST_MODEL, 'read_group', {
+    args: [
+      [['company_id', '=', ZIPPER], ['state', 'in', FORECAST_STATES]],
+      ['qty'],
+      ['next_month'],
+    ],
+    kwargs: { context, lazy: false, limit: 0 },
+  });
+  const months = monthRows
+    .map((r) => String(r.next_month ?? ''))
+    .filter((m) => /^\d{4}-\d{2}$/.test(m))
+    .sort();
+
+  /*
+   * The forecast runs months ahead of the ledger, so the furthest month it
+   * reaches has no actuals at all and the page would open on an empty sheet.
+   * It opens on the last month that has actually happened instead — which is
+   * still the roll-forward the report exists for, just one that has something
+   * to compare against.
+   */
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const settled = months.filter((m) => m <= thisMonth);
+  const month =
+    wanted && months.includes(wanted) ? wanted : (settled.at(-1) ?? months.at(-1) ?? '');
+
   const report: DemandReport = {
-    month: demandPlan.month,
-    company: demandPlan.company,
-    source: demandPlan.source,
+    month,
+    months,
+    company: demandFormula.company,
+    source: demandFormula.source,
+    demand: [],
     materials: [],
     sliders: [],
     live: [],
@@ -282,18 +353,39 @@ export async function demandReport(): Promise<DemandReport> {
     unmatched: [],
     fetchedAt: new Date().toISOString(),
   };
+  if (!month) {
+    report.error = 'Odoo holds no rolling forecast for Zipper.';
+    return report;
+  }
 
-  const [from, to] = monthBounds(demandPlan.month);
-  const context = buildContext(await getSession());
+  const [from, to] = monthBounds(month);
   const grid = new Map<string, Cell>();
   const byCategory = new Map<string, LiveCategory>();
+  const rowUnit = new Map<string, string>();
+  const demandOf = new Map<string, CategoryDemand>();
+
+  for (const c of demandFormula.categories) {
+    demandOf.set(c.key, { ...c, bd: 0, export: 0, total: 0, value: 0 });
+  }
 
   try {
-    const [ledger, transit] = await Promise.all([
+    const [forecast, ledger, transit, inHouse, units, sliderNames, trailing] = await Promise.all([
+      callKw<any[]>(FORECAST_MODEL, 'read_group', {
+        args: [
+          [
+            ['company_id', '=', ZIPPER],
+            ['next_month', '=', month],
+            ['state', 'in', FORECAST_STATES],
+          ],
+          ['qty', 'total_price'],
+          ['item_category', 'sales_person_region'],
+        ],
+        kwargs: { context, lazy: false, limit: 0 },
+      }),
       callKw<any[]>(LEDGER_MODEL, 'read_group', {
         args: [
           [['company_id', '=', ZIPPER], ['month', '>=', from], ['month', '<', to]],
-          ['issue_qty', 'issue_value', 'cloing_qty', 'cloing_value'],
+          ['opening_qty', 'issue_qty', 'issue_value', 'cloing_qty', 'cloing_value'],
           ['item_category', 'product_name'],
         ],
         kwargs: { context, lazy: false, limit: 0 },
@@ -306,8 +398,70 @@ export async function demandReport(): Promise<DemandReport> {
         ],
         kwargs: { context, lazy: false, limit: 0 },
       }),
+      // The sheet's I/H: what is planned to land in this month.
+      callKw<any[]>(TRANSIT_MODEL, 'read_group', {
+        args: [
+          [
+            ['transit_id.company_id', '=', ZIPPER],
+            ['transit_id.ih_plan', '>=', from],
+            ['transit_id.ih_plan', '<', to],
+          ],
+          ['qty_in_transit'],
+          ['item_category', 'product_id'],
+        ],
+        kwargs: { context, lazy: false, limit: 0 },
+      }),
+      callKw<any[]>(LEDGER_MODEL, 'read_group', {
+        args: [
+          [['company_id', '=', ZIPPER], ['month', '>=', from], ['month', '<', to]],
+          ['issue_qty'],
+          ['item_category', 'product_uom'],
+        ],
+        kwargs: { context, lazy: false, limit: 0 },
+      }),
+      callKw<any[]>(SLIDER_MODEL, 'search_read', {
+        args: [[['company_id', '=', ZIPPER]], ['name', 'sequence']],
+        kwargs: { context, limit: 0, order: 'sequence, name' },
+      }),
+      // A month still in the future has consumed nothing, so it can price
+      // nothing. The trailing year can, and a material's cost does not move
+      // enough in a month for that to mislead.
+      callKw<any[]>(LEDGER_MODEL, 'read_group', {
+        args: [
+          [
+            ['company_id', '=', ZIPPER],
+            ['month', '>=', monthsBack(month, 12)],
+            ['month', '<', to],
+          ],
+          ['issue_qty', 'issue_value'],
+          ['item_category'],
+        ],
+        kwargs: { context, lazy: false, limit: 0 },
+      }),
     ]);
 
+    const fallbackCost = new Map<string, number>();
+    for (const row of trailing) {
+      const cat = nameOf(row.item_category);
+      const qty = -num(row.issue_qty);
+      const value = -num(row.issue_value);
+      if (cat && qty > 0 && value > 0) fallbackCost.set(cat, value / qty);
+    }
+
+    /* ---- demand ---- */
+    for (const row of forecast) {
+      const key = nameOf(row.item_category);
+      const held = demandOf.get(key);
+      if (!held) continue;
+      const qty = num(row.qty);
+      if (String(row.sales_person_region ?? '') === EXPORT_REGION) held.export += qty;
+      else held.bd += qty;
+      held.total += qty;
+      held.value += num(row.total_price);
+    }
+    report.demand = [...demandOf.values()].sort((a, b) => b.total - a.total);
+
+    /* ---- the live grid ---- */
     const cellAt = (group: string | null, category: string) => {
       const key = cellKey(group, category);
       let held = grid.get(key);
@@ -321,6 +475,7 @@ export async function demandReport(): Promise<DemandReport> {
           name,
           (held = {
             category: name,
+            unit: null,
             consumption: 0,
             consumptionValue: 0,
             currentStock: 0,
@@ -339,41 +494,53 @@ export async function demandReport(): Promise<DemandReport> {
       const target = cellAt(groupOf(String(row.product_name ?? '')), cat);
       const roll = categoryAt(cat);
 
-      const consumption = -num(row.issue_qty);
-      const consumptionValue = -num(row.issue_value);
-      const stock = num(row.cloing_qty);
-      const stockValue = num(row.cloing_value);
+      target.opening += num(row.opening_qty);
+      target.consumption += -num(row.issue_qty);
+      target.consumptionValue += -num(row.issue_value);
+      target.currentStock += num(row.cloing_qty);
+      target.currentStockValue += num(row.cloing_value);
 
-      target.consumption += consumption;
-      target.consumptionValue += consumptionValue;
-      target.currentStock += stock;
-      target.currentStockValue += stockValue;
-      roll.consumption += consumption;
-      roll.consumptionValue += consumptionValue;
-      roll.currentStock += stock;
-      roll.currentStockValue += stockValue;
+      roll.consumption += -num(row.issue_qty);
+      roll.consumptionValue += -num(row.issue_value);
+      roll.currentStock += num(row.cloing_qty);
+      roll.currentStockValue += num(row.cloing_value);
     }
 
     for (const row of transit) {
       const cat = nameOf(row.item_category) || '(uncategorised)';
       const target = cellAt(groupOf(nameOf(row.product_id)), cat);
       const roll = categoryAt(cat);
+      target.git += num(row.qty_in_transit);
+      target.gitValue += num(row.subtotal);
+      target.gitLines += num(row.__count);
+      roll.git += num(row.qty_in_transit);
+      roll.gitValue += num(row.subtotal);
+      roll.gitLines += num(row.__count);
+    }
 
-      const git = num(row.qty_in_transit);
-      const value = num(row.subtotal);
-      const lines = num(row.__count);
+    for (const row of inHouse) {
+      const cat = nameOf(row.item_category) || '(uncategorised)';
+      cellAt(groupOf(nameOf(row.product_id)), cat).ih += num(row.qty_in_transit);
+    }
 
-      target.git += git;
-      target.gitValue += value;
-      target.gitLines += lines;
-      roll.git += git;
-      roll.gitValue += value;
-      roll.gitLines += lines;
+    // A category can carry a stray row in another unit; the one that moved the
+    // most speaks for it.
+    const best = new Map<string, number>();
+    for (const row of units) {
+      const cat = nameOf(row.item_category) || '(uncategorised)';
+      const unit = nameOf(row.product_uom);
+      if (!unit) continue;
+      const moved = Math.abs(num(row.issue_qty));
+      if (moved >= (best.get(cat) ?? -1)) {
+        best.set(cat, moved);
+        rowUnit.set(cat, unit);
+      }
     }
 
     report.live = [...byCategory.values()]
       .map((c) => ({
         ...c,
+        unit: rowUnit.get(c.category) ?? null,
         consumption: Math.round(c.consumption),
         consumptionValue: Math.round(c.consumptionValue),
         currentStock: Math.round(c.currentStock),
@@ -383,85 +550,253 @@ export async function demandReport(): Promise<DemandReport> {
       }))
       .sort((a, b) => b.consumption - a.consumption);
 
-    const claimed = new Set(
-      [...demandPlan.materials, ...demandPlan.sliders].flatMap(
-        (r) => MATERIAL_CATEGORIES[r.material] ?? [],
-      ),
+    /* ---- the material rows ---- */
+    const cellsFor = (group: string, categories: string[]) =>
+      categories.map((c) => grid.get(cellKey(group, c))).filter((c): c is Cell => !!c);
+
+    report.materials = demandFormula.rows.map((row) => {
+      const categories = MATERIAL_CATEGORIES[row.material] ?? [];
+      const cells = cellsFor(row.group, categories);
+      const has = cells.length > 0;
+      const sum = (pick: (c: Cell) => number) =>
+        has ? Math.round(cells.reduce((a, c) => a + pick(c), 0)) : null;
+
+      let required = 0;
+      const feeds: DemandRow['from'] = [];
+      let bd = 0;
+      let exported = 0;
+      let orderValue = 0;
+      for (const term of row.terms) {
+        let weighted = 0;
+        for (const key of term.categories) {
+          const d = demandOf.get(key);
+          if (!d) continue;
+          weighted += d.total * d.rate;
+          feeds.push({ key, demand: d.total, rate: d.rate, factor: term.factor });
+          bd += d.bd;
+          exported += d.export;
+          orderValue += d.value;
+        }
+        required += (weighted * term.factor) / 1000;
+      }
+
+      const consumption = sum((c) => c.consumption);
+      const consumptionValue = sum((c) => c.consumptionValue);
+      const currentStock = sum((c) => c.currentStock);
+      const currentStockValue = sum((c) => c.currentStockValue);
+      const git = sum((c) => c.git);
+      const op = sum((c) => c.opening);
+      const ih = sum((c) => c.ih);
+      const totalAvailable =
+        currentStock === null && git === null ? null : (currentStock ?? 0) + (git ?? 0);
+
+      const cost = unitCostOf(
+        consumption,
+        consumptionValue,
+        currentStock,
+        currentStockValue,
+        categories.map((c) => fallbackCost.get(c)).find((v) => v !== undefined) ?? null,
+      );
+
+      return {
+        group: row.group,
+        type: row.type,
+        material: row.material,
+        slider: null,
+        from: feeds,
+        demandBd: Math.round(bd),
+        demandExport: Math.round(exported),
+        demandTotal: Math.round(bd + exported),
+        demandValue: Math.round(orderValue),
+        required: round(required),
+        requiredValue: cost.rate === null ? null : Math.round(required * cost.rate),
+        unitCost: cost.rate,
+        costBasis: cost.basis,
+        requiredFrom: 'formula' as const,
+        op,
+        ih,
+        opIh: op === null && ih === null ? null : (op ?? 0) + (ih ?? 0),
+        consumption,
+        consumptionValue,
+        currentStock,
+        currentStockValue,
+        git,
+        gitValue: sum((c) => c.gitValue),
+        gitLines: has ? cells.reduce((a, c) => a + c.gitLines, 0) : 0,
+        totalAvailable,
+        // Cover in money, so it agrees with the columns either side of it.
+        // As a ratio it lands within a point of the quantity version anyway,
+        // but a page that reads in value should not compute in kilos.
+        availability:
+          cost.rate && required && currentStockValue !== null
+            ? ((currentStockValue ?? 0) + (sum((c) => c.gitValue) ?? 0)) /
+              (required * cost.rate)
+            : null,
+        unit: categories.map((c) => rowUnit.get(c)).find(Boolean) ?? null,
+        matchedOn: categories,
+      };
+    });
+
+    /* ---- the sliders ---- */
+    report.sliders = await sliderRows(
+      context,
+      sliderNames.map((s) => String(s.name)),
+      from,
+      to,
     );
+
+    const claimed = new Set(Object.values(MATERIAL_CATEGORIES).flat());
     report.unmapped = report.live
       .filter((c) => !claimed.has(c.category) && (c.consumption || c.git))
       .map((c) => c.category);
     report.unmatched = [
       ...new Set(
-        [...demandPlan.materials, ...demandPlan.sliders]
-          .filter((r) => !MATERIAL_CATEGORIES[r.material])
-          .map((r) => r.material),
+        demandFormula.rows.filter((r) => !MATERIAL_CATEGORIES[r.material]).map((r) => r.material),
       ),
     ];
   } catch (err) {
     report.error = (err as Error).message;
   }
 
-  const compute = (input: PlanInput): DemandRow => {
-    const rate = input.effectiveRate;
-    const required =
-      rate !== null && rate !== undefined ? round(input.demandTotal * rate) : input.cachedRequired;
+  return report;
+}
 
-    const categories = MATERIAL_CATEGORIES[input.material] ?? [];
-    const cells = categories
-      .map((c) => grid.get(cellKey(input.group, c)))
-      .filter((c): c is Cell => !!c);
-    const has = cells.length > 0 && !report.error;
+/**
+ * One row per slider Odoo tracks, with what the ledger says about it.
+ *
+ * No requirement: the sheet sets each slider's demand by hand and no readable
+ * model carries it, so the column says so rather than inventing a number.
+ */
+async function sliderRows(
+  context: Record<string, unknown>,
+  names: string[],
+  from: string,
+  to: string,
+): Promise<DemandRow[]> {
+  if (!names.length) return [];
 
+  // Every TZP product once, then matched to sliders by whole-number code.
+  const products = await callKw<any[]>('product.product', 'search_read', {
+    args: [[['name', 'ilike', 'TZP%']], ['name']],
+    kwargs: { context, limit: 0 },
+  });
+
+  const idsFor = new Map<string, number[]>();
+  for (const name of names) {
+    const digits = Number(name.replace(/[^0-9]/g, ''));
+    // "TZP-305 (N)" is its own slider, so a bare "TZP-305" must not swallow it.
+    const marked = /\(\s*N\s*\)/i.test(name);
+    idsFor.set(
+      name,
+      products
+        .filter((p) => {
+          if (!tzpCodes(p.name).includes(digits)) return false;
+          return /\(\s*N\s*\)/i.test(String(p.name)) === marked;
+        })
+        .map((p) => p.id),
+    );
+  }
+
+  const everyId = [...new Set([...idsFor.values()].flat())];
+  if (!everyId.length) return [];
+
+  const [ledger, transit] = await Promise.all([
+    callKw<any[]>(LEDGER_MODEL, 'read_group', {
+      args: [
+        [
+          ['company_id', '=', ZIPPER],
+          ['product_id', 'in', everyId],
+          ['month', '>=', from],
+          ['month', '<', to],
+        ],
+        ['opening_qty', 'issue_qty', 'issue_value', 'cloing_qty', 'cloing_value'],
+        ['product_id'],
+      ],
+      kwargs: { context, lazy: false, limit: 0 },
+    }),
+    callKw<any[]>(TRANSIT_MODEL, 'read_group', {
+      args: [
+        [
+          ['state', 'in', IN_TRANSIT],
+          ['transit_id.company_id', '=', ZIPPER],
+          ['product_id', 'in', everyId],
+        ],
+        ['qty_in_transit', 'subtotal'],
+        ['product_id'],
+      ],
+      kwargs: { context, lazy: false, limit: 0 },
+    }),
+  ]);
+
+  const byProduct = new Map<number, Cell>();
+  const at = (id: number) => {
+    let held = byProduct.get(id);
+    if (!held) byProduct.set(id, (held = emptyCell()));
+    return held;
+  };
+  for (const row of ledger) {
+    const id = Array.isArray(row.product_id) ? (row.product_id[0] as number) : null;
+    if (id === null) continue;
+    const c = at(id);
+    c.opening += num(row.opening_qty);
+    c.consumption += -num(row.issue_qty);
+    c.consumptionValue += -num(row.issue_value);
+    c.currentStock += num(row.cloing_qty);
+    c.currentStockValue += num(row.cloing_value);
+  }
+  for (const row of transit) {
+    const id = Array.isArray(row.product_id) ? (row.product_id[0] as number) : null;
+    if (id === null) continue;
+    const c = at(id);
+    c.git += num(row.qty_in_transit);
+    c.gitValue += num(row.subtotal);
+    c.gitLines += num(row.__count);
+  }
+
+  return names.map((name) => {
+    const cells = (idsFor.get(name) ?? []).map(at);
     const sum = (pick: (c: Cell) => number) =>
-      has ? Math.round(cells.reduce((a, c) => a + pick(c), 0)) : null;
+      cells.length ? Math.round(cells.reduce((a, c) => a + pick(c), 0)) : null;
 
     const consumption = sum((c) => c.consumption);
+    const consumptionValue = sum((c) => c.consumptionValue);
     const currentStock = sum((c) => c.currentStock);
+    const currentStockValue = sum((c) => c.currentStockValue);
     const git = sum((c) => c.git);
-    const totalAvailable =
-      currentStock === null && git === null ? null : (currentStock ?? 0) + (git ?? 0);
-    const opIh = input.op === null && input.ih === null ? null : (input.op ?? 0) + (input.ih ?? 0);
+    const cost = unitCostOf(consumption, consumptionValue, currentStock, currentStockValue);
 
     return {
-      ref: input.ref,
-      group: input.group,
-      material: input.material,
-      type: input.type ?? null,
-      slider: input.slider ?? null,
-      note: input.note ?? null,
-
-      demand: input.demand,
-      demandTotal: input.demandTotal,
-      rate: input.rate,
-      effectiveRate: rate ?? null,
-
-      required,
-      requiredFrom: input.requiredFrom === 'sheet' ? 'sheet' : 'computed',
-
-      op: input.op,
-      ih: input.ih,
-      opIh,
-
+      group: 'STI sliders',
+      type: null,
+      material: 'STI Slider',
+      slider: name,
+      from: [],
+      demandBd: null,
+      demandExport: null,
+      demandTotal: null,
+      demandValue: null,
+      required: null,
+      requiredValue: null,
+      unitCost: cost.rate,
+      costBasis: cost.basis,
+      requiredFrom: 'unavailable' as const,
+      op: sum((c) => c.opening),
+      ih: null,
+      opIh: sum((c) => c.opening),
       consumption,
-      consumptionValue: sum((c) => c.consumptionValue),
+      consumptionValue,
       currentStock,
-      currentStockValue: sum((c) => c.currentStockValue),
+      currentStockValue,
       git,
       gitValue: sum((c) => c.gitValue),
-      gitLines: has ? cells.reduce((a, c) => a + c.gitLines, 0) : 0,
-
-      totalAvailable,
-      availability: required && totalAvailable !== null ? totalAvailable / required : null,
-
-      sheetStock: opIh !== null && consumption !== null ? round(opIh - consumption) : null,
-      matchedOn: categories,
+      gitLines: cells.reduce((a, c) => a + c.gitLines, 0),
+      totalAvailable:
+        currentStock === null && git === null ? null : (currentStock ?? 0) + (git ?? 0),
+      availability: null,
+      unit: 'Pcs',
+      matchedOn: [`${(idsFor.get(name) ?? []).length} products`],
     };
-  };
-
-  report.materials = demandPlan.materials.map(compute);
-  report.sliders = demandPlan.sliders.map(compute);
-  return report;
+  });
 }
 
 /* ------------------------------------------------------------- one plan row */
@@ -478,12 +813,10 @@ export interface Shipment {
   transit: string;
   vendor: string;
   po: string;
-  /** When it is expected to land, and when it is planned in-house. */
   eta: string | null;
   ihPlan: string | null;
   mode: string;
   qty: number;
-  /** What the shipment is worth, in USD. */
   value: number;
   product: string;
   category: string;
@@ -502,7 +835,6 @@ export interface ItemLine {
 export interface RowDetail {
   key: string;
   kind: 'material' | 'slider';
-  /** What the live figures were read from. */
   matchedOn: string[];
   months: MonthPoint[];
   shipments: Shipment[];
@@ -511,27 +843,44 @@ export interface RowDetail {
   error?: string;
 }
 
-/** How many months of consumption the drill-down draws. */
 const TREND_MONTHS = 12;
 
-function monthsBack(month: string, back: number): string {
-  const [y, m] = month.split('-').map(Number);
-  const total = y * 12 + (m - 1) - back;
-  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}-01`;
+let categoryIds: Promise<Map<string, number>> | null = null;
+
+/**
+ * Item categories resolved to ids, once.
+ *
+ * Filtering on `item_category.display_name` looks like it works and does not:
+ * `display_name` is computed, not stored, so Odoo cannot push the comparison
+ * into SQL and the domain silently matches far more than it should — asking for
+ * METAL WIRE came back with sliders, pin boxes and 20 million units against the
+ * 26 thousand the grouped read gives. Ids are the only safe key.
+ */
+function itemCategories(context: Record<string, unknown>): Promise<Map<string, number>> {
+  categoryIds ??= callKw<any[]>('category.type', 'search_read', {
+    args: [[], ['name']],
+    kwargs: { context, limit: 0 },
+  })
+    .then((rows) => new Map(rows.map((r) => [String(r.name ?? '').trim().toUpperCase(), r.id])))
+    .catch((err) => {
+      categoryIds = null;
+      throw err;
+    });
+  return categoryIds;
 }
 
 /**
- * What sits behind one row of the sheet.
+ * What sits behind one row.
  *
  * Three reads, all scoped to Zipper: the row's consumption month by month, the
  * shipments that make up its GIT, and the items underneath it. A material is
  * found by item category and narrowed to its zipper type; a slider by the
- * products whose name carries its TZP code, because one plan row is one slider,
- * not the whole SLIDER category.
+ * products whose name carries its TZP code.
  */
 export async function rowDetail(
   kind: 'material' | 'slider',
   key: string,
+  month: string,
   group?: string,
 ): Promise<RowDetail> {
   const detail: RowDetail = {
@@ -545,12 +894,11 @@ export async function rowDetail(
   };
 
   const context = buildContext(await getSession());
-  const from = monthsBack(demandPlan.month, TREND_MONTHS);
-  const [monthFrom, to] = monthBounds(demandPlan.month);
+  const from = monthsBack(month, TREND_MONTHS);
+  const [monthFrom, to] = monthBounds(month);
 
   try {
     let scope: unknown[];
-    /** Applied after the read, because the zipper type lives in the name. */
     let keep: (productName: string) => boolean = () => true;
 
     if (kind === 'material') {
@@ -566,19 +914,20 @@ export async function rowDetail(
       if (group) keep = (name) => groupOf(name) === group;
     } else {
       const digits = Number(key.replace(/[^0-9]/g, ''));
-      // Candidates first, then an exact read of the code: `ilike TZP%794` also
-      // matches TZP-1794, which is a different slider.
+      const marked = /\(\s*N\s*\)/i.test(key);
       const candidates = await callKw<any[]>('product.product', 'search_read', {
         args: [[['name', 'ilike', `TZP%${digits}`]], ['name']],
         kwargs: { context, limit: 200 },
       });
-      const ids = candidates.filter((p) => tzpCodes(p.name).includes(digits)).map((p) => p.id);
-      if (!ids.length) {
+      const wanted = candidates.filter(
+        (p) => tzpCodes(p.name).includes(digits) && /\(\s*N\s*\)/i.test(String(p.name)) === marked,
+      );
+      if (!wanted.length) {
         detail.error = `No product in the ledger carries ${key}.`;
         return detail;
       }
-      detail.matchedOn = candidates.filter((p) => ids.includes(p.id)).map((p) => String(p.name));
-      scope = [['product_id', 'in', ids]];
+      detail.matchedOn = wanted.map((p) => String(p.name));
+      scope = [['product_id', 'in', wanted.map((p) => p.id)]];
     }
 
     const ledgerScope = [['company_id', '=', ZIPPER], ...scope];
@@ -623,16 +972,16 @@ export async function rowDetail(
     const months = new Map<string, MonthPoint>();
     for (const row of series) {
       if (!keep(String(row.product_name ?? ''))) continue;
-      const month = String(row.__range?.['month:month']?.from ?? '').slice(0, 7);
-      if (!month) continue;
+      const key2 = String(row.__range?.['month:month']?.from ?? '').slice(0, 7);
+      if (!key2) continue;
       const held =
-        months.get(month) ??
-        ({ month, consumption: 0, consumptionValue: 0, closing: 0, closingValue: 0 } as MonthPoint);
+        months.get(key2) ??
+        ({ month: key2, consumption: 0, consumptionValue: 0, closing: 0, closingValue: 0 } as MonthPoint);
       held.consumption += -num(row.issue_qty);
       held.consumptionValue += -num(row.issue_value);
       held.closing += num(row.cloing_qty);
       held.closingValue += num(row.cloing_value);
-      months.set(month, held);
+      months.set(key2, held);
     }
     detail.months = [...months.values()]
       .map((m) => ({
@@ -660,10 +1009,12 @@ export async function rowDetail(
       .slice(0, 12);
 
     const wanted = shipments.filter((line) => keep(nameOf(line.product_id)));
-
-    // The in-house plan date lives on the transit header, not the line.
     const headerIds = [
-      ...new Set(wanted.map((l) => idOf(l.transit_id)).filter((v): v is number => !!v)),
+      ...new Set(
+        wanted
+          .map((l) => (Array.isArray(l.transit_id) ? (l.transit_id[0] as number) : null))
+          .filter((v): v is number => !!v),
+      ),
     ];
     const plans = new Map<number, string | null>();
     if (headerIds.length) {
@@ -680,7 +1031,8 @@ export async function rowDetail(
         vendor: nameOf(line.vendor_main) || nameOf(line.vendor),
         po: nameOf(line.po_id),
         eta: line.eta || null,
-        ihPlan: plans.get(idOf(line.transit_id) ?? -1) ?? null,
+        ihPlan:
+          plans.get(Array.isArray(line.transit_id) ? (line.transit_id[0] as number) : -1) ?? null,
         mode: nameOf(line.shipment_mode),
         qty: Math.round(num(line.qty_in_transit)),
         value: Math.round(num(line.subtotal)),

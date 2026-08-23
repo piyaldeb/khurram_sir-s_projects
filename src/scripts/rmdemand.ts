@@ -25,18 +25,20 @@ import { barChart, bindChartTooltips } from '../lib/charts';
 import { skeleton } from '../lib/skeleton';
 
 interface DemandRow {
-  ref: string;
   group: string;
-  material: string;
   type: string | null;
+  material: string;
   slider: string | null;
-  note: string | null;
-  demand: { bd: number | null; export: number | null; other: number | null };
-  demandTotal: number;
-  rate: number | null;
-  effectiveRate: number | null;
-  required: number;
-  requiredFrom: 'computed' | 'sheet';
+  from: { key: string; demand: number; rate: number; factor: number }[];
+  demandBd: number | null;
+  demandExport: number | null;
+  demandTotal: number | null;
+  demandValue: number | null;
+  required: number | null;
+  requiredValue: number | null;
+  unitCost: number | null;
+  costBasis: 'consumed' | 'stock' | 'trailing' | null;
+  requiredFrom: 'formula' | 'unavailable';
   op: number | null;
   ih: number | null;
   opIh: number | null;
@@ -49,12 +51,24 @@ interface DemandRow {
   gitLines: number;
   totalAvailable: number | null;
   availability: number | null;
-  sheetStock: number | null;
+  unit: string | null;
   matchedOn: string[];
+}
+
+interface CategoryDemand {
+  key: string;
+  group: string;
+  type: string;
+  rate: number;
+  bd: number;
+  export: number;
+  total: number;
+  value: number;
 }
 
 interface LiveCategory {
   category: string;
+  unit: string | null;
   consumption: number;
   consumptionValue: number;
   currentStock: number;
@@ -66,8 +80,10 @@ interface LiveCategory {
 
 interface DemandReport {
   month: string;
+  months: string[];
   company: string;
   source: string;
+  demand: CategoryDemand[];
   materials: DemandRow[];
   sliders: DemandRow[];
   live: LiveCategory[];
@@ -129,10 +145,13 @@ if (root) {
     grid: $<HTMLElement>('#rmd-grid'),
     note: $<HTMLElement>('#rmd-note'),
     viewSeg: $<HTMLElement>('#rmd-view'),
+    monthPick: $<HTMLSelectElement>('#rmd-month'),
   };
 
   const state = {
     view: 'materials' as View,
+    /** '' means whichever month Odoo's forecast reaches furthest into. */
+    month: '',
     open: null as string | null,
     report: null as DemandReport | null,
     detail: new Map<string, RowDetail | 'loading'>(),
@@ -197,7 +216,7 @@ if (root) {
 
   const rowsOf = (r: DemandReport) =>
     state.view === 'sliders' ? r.sliders : state.view === 'materials' ? r.materials : [];
-  const keyOf = (row: DemandRow) => `${row.ref}|${row.slider ?? row.material}|${row.group}`;
+  const keyOf = (row: DemandRow) => `${row.group}|${row.type ?? ''}|${row.slider ?? row.material}`;
 
   /* ------------------------------------------------------------------ load */
 
@@ -208,7 +227,7 @@ if (root) {
     el.grid.innerHTML = skeleton.table(12, 12);
 
     try {
-      const res = await fetch('/api/rm-demand');
+      const res = await fetch(`/api/rm-demand${state.month ? `?month=${state.month}` : ''}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
       state.report = data as DemandReport;
@@ -231,10 +250,13 @@ if (root) {
     const kind = row.slider ? 'slider' : 'material';
     const target = row.slider ?? row.material;
     const group = row.slider ? '' : `&group=${encodeURIComponent(row.group)}`;
+    const month = state.report?.month ?? '';
 
     try {
       const res = await fetch(
-        `/api/rm-demand?row=${encodeURIComponent(target)}&kind=${kind}${group}`,
+        `/api/rm-demand?row=${encodeURIComponent(
+          target,
+        )}&kind=${kind}&month=${month}${group}`,
       );
       const data = await res.json();
       state.detail.set(
@@ -257,10 +279,15 @@ if (root) {
   /* --------------------------------------------------------------- shaping */
 
   const deviationOf = (row: DemandRow) =>
-    row.consumption === null ? null : row.consumption - row.required;
+    row.consumptionValue === null || row.requiredValue === null
+      ? null
+      : row.consumptionValue - row.requiredValue;
 
   interface Totals {
     required: number;
+    requiredValue: number;
+    totalAvailableValue: number;
+    hasRequired: boolean;
     consumption: number;
     consumptionValue: number;
     currentStock: number;
@@ -275,6 +302,7 @@ if (root) {
       rows.reduce((a, r) => a + (pick(r) ?? 0), 0);
     return {
       required: add((r) => r.required),
+      hasRequired: rows.some((r) => r.required !== null),
       consumption: add((r) => r.consumption),
       consumptionValue: add((r) => r.consumptionValue),
       currentStock: add((r) => r.currentStock),
@@ -282,6 +310,8 @@ if (root) {
       git: add((r) => r.git),
       gitValue: add((r) => r.gitValue),
       totalAvailable: add((r) => r.totalAvailable),
+      requiredValue: add((r) => r.requiredValue),
+      totalAvailableValue: add((r) => (r.currentStockValue ?? 0) + (r.gitValue ?? 0)),
     };
   }
 
@@ -301,21 +331,28 @@ if (root) {
     // Materials and sliders are counted in different units — grosses against
     // pieces — so they are never added together, only shown side by side.
     const block = (label: string, t: Totals, of: DemandRow[]) => {
-      const dev = t.consumption - t.required;
+      const dev = t.consumptionValue - t.requiredValue;
       const over = dev > 0;
       const short = of.filter((row) => row.availability !== null && row.availability < 1).length;
       return `<div class="rail-split">
         <div class="rail-split-head">
           <span>${esc(label)}</span>
-          <b>${qty(t.consumption)} <span class="rail-of">of ${qty(t.required)}</span></b>
+          <b>${usd(t.consumptionValue)}${
+            t.hasRequired ? ` <span class="rail-of">of ${usd(t.requiredValue)}</span>` : ''
+          }</b>
         </div>
         <p class="rail-note">
-          <span class="rmd-dev ${over ? 'over' : 'under'}">${over ? '▲ +' : '▼ '}${qty(
-            Math.abs(dev),
-          )}</span>
-          against the requirement · ${usd(t.consumptionValue)} consumed · ${qty(short)} row${
-            short === 1 ? '' : 's'
-          } under cover
+          ${
+            t.hasRequired
+              ? `<span class="rmd-dev ${over ? 'over' : 'under'}">${over ? '▲ +' : '▼ '}${usd(
+                  Math.abs(dev),
+                )}</span> against the requirement · `
+              : 'consumed · '
+          }${qty(t.consumption)} ${esc(of[0]?.unit ?? '')}${
+            t.hasRequired
+              ? ` · ${qty(short)} row${short === 1 ? '' : 's'} under cover`
+              : ' · no requirement in Odoo'
+          }
         </p>
       </div>`;
     };
@@ -330,7 +367,7 @@ if (root) {
     const totals = railBlock(
       'Against the plan',
       block('Materials', materials, r.materials) + block('STI sliders', sliders, r.sliders),
-      'Materials are grosses, sliders are pieces — the two are never added.',
+      'Materials and sliders are counted in different units — the two are never added.',
     );
 
     const live = r.live.reduce(
@@ -360,11 +397,11 @@ if (root) {
 
   const devCell = (dev: number | null) => {
     if (dev === null) return '<td class="num">—</td>';
-    if (Math.round(dev) === 0) return '<td class="num muted">0</td>';
+    if (Math.round(dev) === 0) return '<td class="num muted">$0</td>';
     const over = dev > 0;
     return `<td class="num"><span class="rmd-dev ${over ? 'over' : 'under'}">${
       over ? '▲ +' : '▼ '
-    }${qty(Math.abs(dev))}</span></td>`;
+    }${usd(Math.abs(dev))}</span></td>`;
   };
 
   const availCell = (v: number | null) =>
@@ -372,10 +409,17 @@ if (root) {
       ? '<td class="num muted">—</td>'
       : `<td class="num ${v < 1 ? 'behind' : 'ahead'}">${pct(v)}</td>`;
 
-  /** A quantity with what it is worth underneath it. */
-  const pairCell = (n: number | null, value: number | null, tinted = false) =>
-    `<td class="num${tinted ? ' tinted' : ''}"><span class="rmd-qty">${qty(n)}</span>${
-      value === null || value === undefined ? '' : `<span class="rmd-val">${usdShort(value)}</span>`
+  /**
+   * Money on top, the quantity that produced it underneath.
+   *
+   * The page reads in value — that is the language the business plans in, and
+   * the only one every material shares. The quantity stays because a planner
+   * orders in kilos and pieces, not dollars, and because it is what makes the
+   * cover figure mean anything.
+   */
+  const pairCell = (value: number | null, n: number | null, tinted = false) =>
+    `<td class="num${tinted ? ' tinted' : ''}"><span class="rmd-qty">${usd(value)}</span>${
+      n === null || n === undefined ? '' : `<span class="rmd-val">${qty(n)}</span>`
     }</td>`;
 
   /* ------------------------------------------------------------ drill-down */
@@ -391,30 +435,72 @@ if (root) {
         ${note ? `<span class="oa-stat-note">${note}</span>` : ''}
       </div>`;
 
+    /*
+     * The requirement is the one figure on the page that is worked out rather
+     * than read, so the row shows the working: every zipper category that feeds
+     * it, its forecast, and the rate and factor applied to it.
+     */
+    const working = row.from.length
+      ? `<div class="rmd-working">
+          <span class="rmd-working-label">Required =</span>
+          ${row.from
+            .map(
+              (f) =>
+                `<span class="rmd-term">${esc(f.key)} ${qty(f.demand)} × ${f.rate} × ${
+                  f.factor
+                }</span>`,
+            )
+            .join('<span class="rmd-plus">+</span>')}
+          <span class="rmd-working-label">÷ 1000 = ${qty(row.required)}${
+            row.unit ? ` ${esc(row.unit)}` : ''
+          }${row.requiredValue === null ? '' : ` = ${usd(row.requiredValue)}`}</span>
+        </div>`
+      : '';
+
     const inputs = `<div class="oa-stats">
-      ${stat('Demand BD', qty(row.demand.bd), 'zippers')}
-      ${stat('Export', qty(row.demand.export), 'zippers')}
-      ${stat('Total demand', qty(row.demandTotal), 'zippers ordered')}
-      ${row.rate === null ? '' : stat('Rate', String(row.rate), 'per zipper')}
+      ${row.demandBd === null ? '' : stat('Demand BD', qty(row.demandBd), 'zippers')}
+      ${row.demandExport === null ? '' : stat('Export', qty(row.demandExport), 'zippers')}
+      ${
+        row.demandTotal === null
+          ? ''
+          : stat('Ordered', usd(row.demandValue), `${qty(row.demandTotal)} zippers`)
+      }
       ${stat(
         'Required',
-        qty(row.required),
-        row.requiredFrom === 'computed' && row.effectiveRate
-          ? `${qty(row.demandTotal)} × ${row.effectiveRate}`
-          : 'carried from the sheet',
+        row.requiredValue === null ? '—' : usd(row.requiredValue),
+        row.required === null
+          ? 'not in Odoo'
+          : `${qty(row.required)} ${row.unit ?? ''}`.trim(),
       )}
-      ${stat('OP + I/H', qty(row.opIh), `${qty(row.op)} + ${qty(row.ih)}`)}
+      ${
+        row.unitCost === null
+          ? ''
+          : stat(
+              'Priced at',
+              `$${row.unitCost.toFixed(2)}`,
+              `per ${row.unit ?? 'unit'}, from ${
+                row.costBasis === 'stock'
+                  ? 'what is in stock'
+                  : row.costBasis === 'trailing'
+                    ? 'the trailing year'
+                    : 'what was consumed'
+              }`,
+            )
+      }
+      ${stat('Opening', qty(row.op), row.unit ?? '')}
+      ${row.ih === null ? '' : stat('In-house this month', qty(row.ih), row.unit ?? '')}
     </div>`;
 
     const head = `<div class="oa-detail-head">
       <div class="oa-detail-title">
-        <p class="eyebrow">${esc(row.group || `ref ${row.ref}`)}${
+        <p class="eyebrow">${esc(row.group)}${
           loaded?.matchedOn.length ? ` · ${esc(loaded.matchedOn.slice(0, 2).join(', '))}` : ''
         }</p>
         <h2>${esc(row.slider ?? row.material)}</h2>
       </div>
       ${inputs}
-    </div>`;
+    </div>
+    ${working}`;
 
     if (!loaded) {
       return `<tr class="day-detail"><td colspan="${span}">
@@ -528,7 +614,7 @@ if (root) {
     let last = '';
     return rows
       .map((row) => {
-        const label = row.group || `ref ${row.ref}`;
+        const label = row.group;
         const heading =
           label === last
             ? ''
@@ -558,70 +644,76 @@ if (root) {
         `<td class="sticky-col"><span class="disclose" aria-hidden="true">${
           open ? '▾' : '▸'
         }</span>${esc(isMaterial ? row.material : (row.slider ?? ''))}${
-          row.note ? `<span class="rmd-note" title="${esc(row.note)}">note</span>` : ''
-        }${
-          row.requiredFrom === 'sheet'
-            ? '<span class="rmd-note" title="Required is a sum across sibling rows in the sheet, so it cannot be recomputed here.">sheet</span>'
-            : ''
+          row.unit ? `<span class="rmd-unit-tag">${esc(row.unit)}</span>` : ''
         }</td>` +
         (isMaterial ? `<td class="co">${esc(row.type ?? '')}</td>` : '') +
-        `<td class="num muted">${qty(row.demandTotal)}</td>` +
-        `<td class="num">${qty(row.required)}</td>` +
-        pairCell(row.consumption, row.consumptionValue, true) +
+        (row.demandTotal === null
+          ? '<td class="num muted">—</td>'
+          : pairCell(row.demandValue, row.demandTotal)) +
+        (row.required === null
+          ? '<td class="num"><span class="rmd-note" title="The requirement per slider is set by hand in the workbook and no readable Odoo model carries it.">not in Odoo</span></td>'
+          : pairCell(row.requiredValue, row.required)) +
+        pairCell(row.consumptionValue, row.consumption, true) +
         devCell(deviationOf(row)) +
         `<td class="num muted">${qty(row.opIh)}</td>` +
-        pairCell(row.currentStock, row.currentStockValue) +
-        pairCell(row.git, row.gitValue) +
-        `<td class="num">${qty(row.totalAvailable)}</td>` +
+        pairCell(row.currentStockValue, row.currentStock) +
+        pairCell(row.gitValue, row.git) +
+        pairCell(
+          (row.currentStockValue ?? 0) + (row.gitValue ?? 0),
+          row.totalAvailable,
+        ) +
         availCell(row.availability)
       );
     };
 
     const t = totalsOf(rows);
-    const dev = t.consumption - t.required;
+    const dev = t.consumptionValue - t.requiredValue;
 
     const total = `<tr class="grand-row">
       <td class="sticky-col" colspan="${isMaterial ? 2 : 1}">All ${qty(rows.length)} rows</td>
       <td class="num"></td>
-      <td class="num">${qty(t.required)}</td>
-      ${pairCell(t.consumption, t.consumptionValue)}
-      ${devCell(dev)}
+      ${t.hasRequired ? pairCell(t.requiredValue, t.required) : '<td class="num">—</td>'}
+      ${pairCell(t.consumptionValue, t.consumption)}
+      ${devCell(t.hasRequired ? dev : null)}
       <td class="num"></td>
-      ${pairCell(t.currentStock, t.currentStockValue)}
-      ${pairCell(t.git, t.gitValue)}
-      <td class="num">${qty(t.totalAvailable)}</td>
-      ${availCell(t.required ? t.totalAvailable / t.required : null)}
+      ${pairCell(t.currentStockValue, t.currentStock)}
+      ${pairCell(t.gitValue, t.git)}
+      ${pairCell(t.totalAvailableValue, t.totalAvailable)}
+      ${availCell(
+        t.hasRequired && t.requiredValue ? t.totalAvailableValue / t.requiredValue : null,
+      )}
     </tr>`;
 
     /*
      * Two tiers, because the first figure is not in the same unit as the rest.
      * Demand is finished zippers, in pieces; everything after it is the raw
-     * material that makes them, in the ledger's own units. Side by side with
-     * nothing to say so, 6,722,653 against 29,741 reads as an error rather
-     * than as pieces against grosses.
+     * material that makes them. Side by side with nothing to say so,
+     * 6,722,653 against 29,741 reads as an error rather than as zippers
+     * against kilos of the wire they are made from.
+     *
+     * The band cannot name one unit for the material half: the ledger counts
+     * wire and tape in kg, sliders in pieces. Each row carries its own.
      */
-    const materialUnit = isMaterial ? 'grosses' : 'pieces';
-
     return `<table class="grid day-grid rmd-sheet">
       <thead>
         <tr>
           <th class="sticky-col"></th>
           ${isMaterial ? '<th></th>' : ''}
-          <th class="group-head">Zipper ordered · pcs</th>
-          <th class="group-head" colspan="3">Material this month · ${esc(materialUnit)}</th>
-          <th class="group-head" colspan="5">What is available · ${esc(materialUnit)}</th>
+          <th class="group-head">Ordered · USD, pcs beneath</th>
+          <th class="group-head" colspan="3">Material this month · USD, qty beneath</th>
+          <th class="group-head" colspan="5">What is available · USD, qty beneath</th>
         </tr>
         <tr class="sub-row">
           <th class="sticky-col">${isMaterial ? 'Material' : 'Slider'}</th>
           ${isMaterial ? '<th class="text">Type</th>' : ''}
-          <th class="num">Demand</th>
-          <th class="num">Required</th>
-          <th class="num">Consumed</th>
-          <th class="num">Deviation</th>
+          <th class="num">Order $</th>
+          <th class="num">Required $</th>
+          <th class="num">Consumed $</th>
+          <th class="num">Deviation $</th>
           <th class="num">OP + I/H</th>
-          <th class="num">Current stock</th>
-          <th class="num">GIT</th>
-          <th class="num">Total available</th>
+          <th class="num">Current stock $</th>
+          <th class="num">GIT $</th>
+          <th class="num">Total available $</th>
           <th class="num">Cover</th>
         </tr>
       </thead>
@@ -636,10 +728,12 @@ if (root) {
     const rows = r.live
       .map(
         (c) => `<tr>
-          <td class="sticky-col">${esc(c.category)}</td>
-          ${pairCell(c.consumption, c.consumptionValue, true)}
-          ${pairCell(c.currentStock, c.currentStockValue)}
-          ${pairCell(c.git, c.gitValue)}
+          <td class="sticky-col">${esc(c.category)}${
+            c.unit ? `<span class="rmd-unit-tag">${esc(c.unit)}</span>` : ''
+          }</td>
+          ${pairCell(c.consumptionValue, c.consumption, true)}
+          ${pairCell(c.currentStockValue, c.currentStock)}
+          ${pairCell(c.gitValue, c.git)}
           <td class="num muted">${qty(c.gitLines)}</td>
         </tr>`,
       )
@@ -649,9 +743,9 @@ if (root) {
       <thead>
         <tr class="sub-row">
           <th class="sticky-col">Item category</th>
-          <th class="num">Consumed</th>
-          <th class="num">Closing stock</th>
-          <th class="num">In transit</th>
+          <th class="num">Consumed $</th>
+          <th class="num">Closing stock $</th>
+          <th class="num">In transit $</th>
           <th class="num">Transit lines</th>
         </tr>
       </thead>
@@ -691,22 +785,35 @@ if (root) {
 
     el.note.textContent =
       gaps.join(' ') ||
-      'Demand is finished zippers in pieces; every figure after it is the raw material that makes them, in the ledger’s own units — the two are not comparable. Required is the demand times the rate; consumed, stock and GIT are read from Odoo for the row’s own materials and zipper type.';
+      'Every figure is read from Odoo: demand from the rolling forecast, the rest from the raw-material ledger and the transit lines. Only the formula behind Required comes from the workbook. Money leads with the quantity beneath it; Required is priced at what the ledger itself paid, so the two sides are comparable. Demand is finished zippers in pieces and is not.';
   }
 
-  function renderControls() {
+  function renderControls(r: DemandReport) {
     el.viewSeg.innerHTML = VIEWS.map(
       (v) =>
         `<button class="seg" type="button" role="tab" data-view="${v.key}" aria-selected="${
           state.view === v.key
         }">${esc(v.label)}</button>`,
     ).join('');
+
+    /*
+     * Every month Odoo holds a forecast for. The page opens on the furthest,
+     * which is what makes it roll forward on its own: when the sales team
+     * enters next month, this follows without anyone touching the site.
+     */
+    el.monthPick.innerHTML = [...r.months]
+      .reverse()
+      .map(
+        (m) => `<option value="${m}"${m === r.month ? ' selected' : ''}>${esc(monthLong(m))}</option>`,
+      )
+      .join('');
+    el.monthPick.disabled = r.months.length < 2;
   }
 
   function render() {
     const r = state.report;
     if (!r) return;
-    renderControls();
+    renderControls(r);
     renderRail(r);
     renderGrid(r);
     el.status.hidden = true;
@@ -735,6 +842,13 @@ if (root) {
     if (!row?.dataset.row) return;
     event.preventDefault();
     toggleRow(row.dataset.row);
+  });
+
+  el.monthPick.addEventListener('change', () => {
+    state.month = el.monthPick.value;
+    state.open = null;
+    state.detail.clear();
+    void load();
   });
 
   el.viewSeg.addEventListener('click', (event) => {

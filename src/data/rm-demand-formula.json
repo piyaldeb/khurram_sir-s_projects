@@ -1,0 +1,97 @@
+{
+  "company": "Zipper",
+  "source": "SC_ RM Demand Plan (1).xlsx · sheet \"Zip Demand Plan Aug\" · formula only",
+  "note": "The only thing here that came from the workbook. Every quantity is read from Odoo: demand from rolling.forecast.line, opening and stock from rm.stock.detailed.monthly, in-transit and in-house from transit.line. required = SUM over terms of ( SUM over the term's categories of demand x that category's rate ) x factor / 1000",
+  "categories": [
+    { "key": "M#4 CE", "group": "Metal #4", "type": "CE", "rate": 5.5 },
+    { "key": "M#4 OE", "group": "Metal #4", "type": "OE", "rate": 5.5 },
+    { "key": "AL#4 CE", "group": "Aluminium #4", "type": "CE", "rate": 5.5 },
+    { "key": "C#3 CE", "group": "Coil #3", "type": "CE", "rate": 6.57 },
+    { "key": "C#3 OE", "group": "Coil #3", "type": "OE", "rate": 6.57 },
+    { "key": "C#3 CE 2 WAY", "group": "Coil #3", "type": "2 Way", "rate": 17.36 },
+    { "key": "C#5 CE", "group": "Coil #5", "type": "CE", "rate": 8.81 },
+    { "key": "C#5 OE", "group": "Coil #5", "type": "OE", "rate": 25.68 },
+    { "key": "M#5 CE", "group": "Metal #5", "type": "CE", "rate": 7.06 },
+    { "key": "M#5 OE", "group": "Metal #5", "type": "OE", "rate": 23.64 },
+    { "key": "M#5 OE 2 WAY", "group": "Metal #5", "type": "2 Way", "rate": 23.72 },
+    { "key": "AL#5 OE", "group": "Aluminium #5", "type": "OE", "rate": 23.64 },
+    { "key": "P#3 CE", "group": "Plastic #3", "type": "CE", "rate": 6.46 },
+    { "key": "P#3 OE", "group": "Plastic #3", "type": "OE", "rate": 10.15 },
+    { "key": "P#5 CE", "group": "Plastic #5", "type": "CE", "rate": 7.57 },
+    { "key": "P#5 OE", "group": "Plastic #5", "type": "OE", "rate": 22.21 },
+    { "key": "INV#3 CE", "group": "Invisible #3", "type": "CE", "rate": 9.52 }
+  ],
+  "rows": [
+    {
+      "group": "Metal #4",
+      "type": "CE",
+      "material": "Metal Wire",
+      "terms": [{ "categories": ["M#4 CE", "M#4 OE", "AL#4 CE"], "factor": 0.77 }]
+    },
+    {
+      "group": "Metal #4",
+      "type": "OE",
+      "material": "Tape / Long Chain",
+      "terms": [{ "categories": ["M#4 CE"], "factor": 0.38 }]
+    },
+    {
+      "group": "Aluminium #4",
+      "type": "CE",
+      "material": "Alm Wire",
+      "terms": [{ "categories": ["AL#4 CE"], "factor": 0.67 }]
+    },
+    {
+      "group": "Coil #3",
+      "type": "CE",
+      "material": "Tape / Long Chain",
+      "terms": [
+        { "categories": ["C#3 CE", "C#3 OE"], "factor": 0.45 },
+        { "categories": ["C#3 CE 2 WAY"], "factor": 0.28 }
+      ]
+    },
+    {
+      "group": "Coil #5",
+      "type": "CE",
+      "material": "Tape / Long Chain",
+      "terms": [{ "categories": ["C#5 CE", "C#5 OE"], "factor": 0.6 }]
+    },
+    {
+      "group": "Metal #5",
+      "type": "CE",
+      "material": "Metal Wire",
+      "terms": [{ "categories": ["M#5 CE", "M#5 OE", "M#5 OE 2 WAY"], "factor": 0.95 }]
+    },
+    {
+      "group": "Metal #5",
+      "type": "OE",
+      "material": "Tape / Long Chain",
+      "terms": [
+        { "categories": ["M#5 CE", "M#5 OE", "AL#5 OE", "M#5 OE 2 WAY"], "factor": 0.4 }
+      ]
+    },
+    {
+      "group": "Aluminium #5",
+      "type": "OE",
+      "material": "Alm Wire",
+      "terms": [{ "categories": ["AL#5 OE"], "factor": 0.8 }]
+    },
+    {
+      "group": "Plastic #3",
+      "type": "CE",
+      "material": "Tape / Long Chain",
+      "terms": [{ "categories": ["P#3 CE", "P#3 OE"], "factor": 0.54 }]
+    },
+    {
+      "group": "Plastic #5",
+      "type": "CE",
+      "material": "Tape / Long Chain",
+      "terms": [{ "categories": ["P#5 CE", "P#5 OE"], "factor": 0.57 }]
+    },
+    {
+      "group": "Invisible #3",
+      "type": "CE",
+      "material": "Tape / Long Chain",
+      "terms": [{ "categories": ["INV#3 CE"], "factor": 0.5 }]
+    }
+  ]
+}
