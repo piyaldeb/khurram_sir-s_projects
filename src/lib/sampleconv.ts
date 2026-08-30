@@ -545,7 +545,11 @@ async function buildSlice(fy: number, key: CompanyKey): Promise<CompanySlice> {
     const value = (Number(line.price_subtotal) || 0) / share;
     const qty = (Number(line.product_uom_qty) || 0) / share;
     const no = nameOf(line.order_id);
-    const item = oneLine(nameOf(line.product_id), 70);
+    // Odoo names a variant "COIL 3 ZIPPER CLOSE END (TEETH, Slider C#3 DTM
+    // TZP-2239, Dyeing …)" — the family, then the full spec of every component.
+    // The drill-down wants the family; the spec is a paragraph per row.
+    const full = nameOf(line.product_id);
+    const item = oneLine(full.split('(')[0] || full, 60);
     const shade = oneLine(line.shade || line.shade_name, 70);
     const linePlms = plmsIn(`${line.shade ?? ''} ${line.shade_name ?? ''}`);
 
@@ -665,8 +669,18 @@ function stampFor(fy: number, key: CompanyKey) {
     ]);
 }
 
+/**
+ * Bumped whenever the shape a slice is built into changes.
+ *
+ * The cache holds the built slice, not the query, so a new field on a row is
+ * simply absent from every slice built before it — the page renders blanks and
+ * nothing says why. Versioning the key means a shape change rebuilds itself
+ * instead of waiting for someone to notice and press Refresh.
+ */
+const SHAPE = 3;
+
 function getSlice(fy: number, key: CompanyKey, force = false) {
-  return cached<CompanySlice>(`sampleconv-${fy}-${key}`, 'sampleconv', {
+  return cached<CompanySlice>(`sampleconv-v${SHAPE}-${fy}-${key}`, 'sampleconv', {
     ttlMs: fy === fyOf(todayIso()) ? OPEN_TTL_MS : CLOSED_TTL_MS,
     stamp: stampFor(fy, key),
     // A finished year cannot change under the reader, so an expired copy of it

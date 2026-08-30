@@ -470,13 +470,13 @@ if (root) {
    * the sample's total rather than double-counting it.
    */
   function detailRow(r: any): string {
+    // The list is already earliest-first, so the tag goes on the first row
+    // rather than on every order sharing the earliest date.
     const orders = (r.oas as any[])
       .map(
-        (o) => `<tr>
+        (o, i) => `<tr>
           <td><strong>${esc(o.no)}</strong>${
-            o.date === r.firstBulk
-              ? ' <span class="tag">first</span>'
-              : ''
+            i === 0 ? ' <span class="tag">first</span>' : ''
           }</td>
           <td>${o.date ? esc(shortDate(o.date)) : '—'}</td>
           <td class="text">${
