@@ -4856,3 +4856,128 @@ table.month-grid td.date-cell {
 table.month-grid td.date-cell:hover {
   background: inherit;
 }
+
+/* ------------------------------------------------- sample conversion drill
+
+   A converted sample opens to show the bulk orders that converted it. The
+   count on the row is a claim; the orders under it are the evidence, so
+   getting to them is one click rather than a separate report. */
+
+.sampleconv tr.clickable {
+  cursor: pointer;
+}
+
+.sampleconv tr.clickable:hover td {
+  background: var(--surface-sunk);
+}
+
+.sampleconv .drill {
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--ink-muted);
+  font-size: 10px;
+  transition: transform 0.12s ease;
+}
+
+.sampleconv tr.open .drill {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
+
+.sampleconv tr.open > td {
+  background: var(--accent-wash);
+}
+
+.sampleconv tr.drill-row[hidden] {
+  display: none;
+}
+
+.sampleconv tr.drill-row > td {
+  padding: 0;
+  background: var(--surface-sunk);
+}
+
+.sampleconv .drill-body {
+  padding: 10px 14px 14px;
+  border-left: 3px solid var(--accent);
+}
+
+.sampleconv .drill-body > .rail-sub {
+  margin: 0 0 8px;
+}
+
+.sampleconv table.drill-grid {
+  width: auto;
+  min-width: min(560px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+/* The quarter a filter is pinned to, and the row a search came from. */
+.sampleconv tr.active > td {
+  background: var(--accent-wash);
+  font-weight: 550;
+}
+
+/* Sortable breakdown, and the row it exists to surface: a buyer or a team the
+   plant developed a hundred samples for and sold nothing to. */
+.sampleconv th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sampleconv th.sortable:hover {
+  color: var(--ink);
+  background: var(--surface-sunk);
+}
+
+.sampleconv th.sorted {
+  color: var(--accent);
+}
+
+.sampleconv th .arrow {
+  margin-left: 4px;
+  font-size: 9px;
+}
+
+.sampleconv tr.barren td:first-child {
+  box-shadow: inset 3px 0 0 var(--critical);
+}
+
+.sampleconv tr.barren td:nth-child(3),
+.sampleconv tr.barren td:nth-child(4) {
+  color: var(--critical);
+}
+
+/* Effort and outcome in one bar: the pale span is the samples developed, the
+   solid one the share of them that won an order. */
+.meter.stacked {
+  position: relative;
+}
+
+.meter.stacked .meter-fill.over {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+/* A quarter from before the sample number was recorded: its figures are real
+   but incomplete, so the row is marked rather than blanked. */
+.sampleconv tr.partial td {
+  background: color-mix(in srgb, var(--warning) 7%, transparent);
+}
+
+.sampleconv .tag.warn {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+
+.sampleconv .drill-grid code {
+  font-family: var(--mono);
+  font-size: 11px;
+}

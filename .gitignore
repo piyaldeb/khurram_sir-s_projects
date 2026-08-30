@@ -13,3 +13,6 @@ dist/
 /data/
 /data.local-backup/
 .vercel
+
+# The Odoo addons source, kept here for reference; it is its own repository.
+taps/

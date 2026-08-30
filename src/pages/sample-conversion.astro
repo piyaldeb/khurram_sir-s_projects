@@ -1,0 +1,172 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+import { availableFys, fyLabel, fyOf, todayIso } from '../lib/sampleconv';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const fys = availableFys();
+const currentFy = fyOf(todayIso());
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+---
+
+<Base title="Sample conversion" connected={!!session} connectionLabel={connectionLabel}>
+  <main class="main sampleconv" data-fy={String(currentFy)} data-odoo={session ? '1' : ''}>
+    <header class="page-head">
+      <div class="page-head-text">
+        <p class="eyebrow">Sales &amp; Development</p>
+        <h1>Sample to Bulk Conversion</h1>
+        <p class="lede">
+          How many of the samples developed in each quarter went on to win a bulk order, and how
+          much business they brought in. A sample is tied to its bulk order two ways: by the sample
+          number written on the bulk line — <code>SA Ref</code> for Zipper, <code>Finish Ref</code>
+          for Metal Trims — and, for the buyers who work that way, by a shared PLM number. Open any
+          converted sample to see the orders it won and which link found them.
+        </p>
+        <p class="hint" id="as-of" aria-live="polite">Loading the fiscal year…</p>
+      </div>
+
+      <div class="page-head-actions">
+        <div class="segmented" role="tablist" aria-label="Business unit" id="co-seg">
+          <button class="seg" type="button" role="tab" data-co="all" aria-selected="true">
+            Both units
+          </button>
+          <button class="seg" type="button" role="tab" data-co="zipper" aria-selected="false">
+            Zipper
+          </button>
+          <button class="seg" type="button" role="tab" data-co="mt" aria-selected="false">
+            Metal Trims
+          </button>
+        </div>
+
+        <div class="segmented" role="tablist" aria-label="Fiscal year" id="fy-seg">
+          {
+            fys.map((fy) => (
+              <button
+                class="seg"
+                type="button"
+                role="tab"
+                data-fy={String(fy)}
+                aria-selected={fy === currentFy ? 'true' : 'false'}
+              >
+                {fyLabel(fy)}
+              </button>
+            ))
+          }
+        </div>
+        <button class="btn" type="button" id="refresh">Refresh</button>
+      </div>
+    </header>
+
+    {
+      odooError && (
+        <div class="state error panel" style="margin-top:18px">
+          <p>Odoo is not reachable.</p>
+          <p class="hint">{odooError}</p>
+        </div>
+      )
+    }
+
+    <div class="panel state" id="sc-status" hidden>
+      <h2>
+        <span class="spinner"></span>
+        <span id="sc-status-title">Building the fiscal year</span>
+      </h2>
+      <p>
+        A year is every sample raised and every bulk line that names one — tens of thousands of
+        records per business unit — so the first read of a year takes a while. It is held after
+        that.
+      </p>
+    </div>
+
+    <div id="sc-body" hidden={!!odooError}>
+      <div class="banner" id="error-banner" hidden></div>
+      <div class="banner warn" id="quality" hidden></div>
+
+      <section class="kpis" id="kpis"></section>
+
+      <section class="chart-grid">
+        <div class="panel card">
+          <div class="card-head">
+            <h2>Conversion by quarter</h2>
+            <span class="hint" id="trend-note"></span>
+          </div>
+          <div class="chart-host" id="chart-trend"></div>
+        </div>
+
+        <div class="panel card">
+          <div class="card-head">
+            <h2>Bulk value won by quarter</h2>
+            <span class="hint" id="value-note"></span>
+          </div>
+          <div class="chart-host" id="chart-value"></div>
+        </div>
+      </section>
+
+      <section class="panel card">
+        <div class="card-head">
+          <h2>Quarter by quarter</h2>
+          <span class="hint">Click a quarter to filter the page to it.</span>
+        </div>
+        <div class="table-scroll" id="quarter-grid" style="max-height:none"></div>
+      </section>
+
+      <section class="panel card">
+        <div class="card-head">
+          <h2>Who is converting</h2>
+          <span class="hint" id="dim-note"></span>
+        </div>
+        <div class="chips-bar">
+          <span class="chips-label">Group by</span>
+          <div id="dim-chips" class="chips-group"></div>
+          <div class="toolbar-spacer"></div>
+          <span class="hint">Click a row to filter the page to it.</span>
+        </div>
+        <div class="table-scroll" id="dim-grid" style="max-height:420px"></div>
+      </section>
+
+      <section class="panel card">
+        <div class="card-head">
+          <h2>The samples that converted</h2>
+          <span class="hint" id="rows-note"></span>
+        </div>
+        <div class="chips-bar">
+          <span class="chips-label">Show</span>
+          <div id="sc-filters" class="chips-group">
+            <button class="chip active" type="button" data-only="converted">Converted</button>
+            <button class="chip" type="button" data-only="lost">Not taken up</button>
+            <button class="chip" type="button" data-only="open">Still open</button>
+          </div>
+          <div class="toolbar-spacer"></div>
+          <button class="chip" type="button" id="export">Export CSV</button>
+          <input
+            class="table-search chips-search"
+            type="search"
+            id="sc-search"
+            placeholder="Buyer, team, salesperson, SA or OA number"
+          />
+        </div>
+        <div class="table-scroll" id="sc-grid"></div>
+        <div class="pager" id="sc-pager" hidden>
+          <button class="btn" type="button" id="page-prev">‹ Previous</button>
+          <span class="hint" id="page-label"></span>
+          <button class="btn" type="button" id="page-next">Next ›</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="../scripts/sampleconv.ts"></script>
+</Base>
