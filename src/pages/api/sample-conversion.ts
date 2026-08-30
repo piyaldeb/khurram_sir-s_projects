@@ -79,6 +79,11 @@ export const GET: APIRoute = async ({ url }) => {
     // conversion rate of 100%: true of the rows on screen, and useless.
     const totals = totalsOf(rows);
 
+    // The unit's whole year, before any of the filters. The report card reads
+    // the filtered figure against this, so "79.6%" arrives as "against 11.8%
+    // for the unit" rather than as a number with nothing to lean on.
+    const baseline = totalsOf(data.rows);
+
     // Every breakdown is computed, not just the one on screen: they are cheap
     // beside the year they are computed from, and the page switches between
     // them without another round trip. Generous by default, because the page
@@ -119,6 +124,7 @@ export const GET: APIRoute = async ({ url }) => {
       quarters,
       dimensions: DIMENSIONS,
       totals,
+      baseline,
       breakdowns,
       matched: rows.length,
       offset,

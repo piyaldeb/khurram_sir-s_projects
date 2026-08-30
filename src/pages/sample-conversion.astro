@@ -40,10 +40,7 @@ const connectionLabel = session
 
       <div class="page-head-actions">
         <div class="segmented" role="tablist" aria-label="Business unit" id="co-seg">
-          <button class="seg" type="button" role="tab" data-co="all" aria-selected="true">
-            Both units
-          </button>
-          <button class="seg" type="button" role="tab" data-co="zipper" aria-selected="false">
+          <button class="seg" type="button" role="tab" data-co="zipper" aria-selected="true">
             Zipper
           </button>
           <button class="seg" type="button" role="tab" data-co="mt" aria-selected="false">
@@ -95,7 +92,11 @@ const connectionLabel = session
       <div class="banner" id="error-banner" hidden></div>
       <div class="banner warn" id="quality" hidden></div>
 
-      <section class="kpis" id="kpis"></section>
+      <!-- The report card. Reads whatever the page is currently filtered to,
+           so narrowing to a quarter, a buyer or a sales team re-states the
+           whole result for that slice rather than leaving the reader to
+           assemble it from the tables below. -->
+      <section class="panel scorecard" id="scorecard"></section>
 
       <section class="chart-grid">
         <div class="panel card">

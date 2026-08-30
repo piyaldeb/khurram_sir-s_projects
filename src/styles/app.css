@@ -4981,3 +4981,266 @@ table.month-grid td.date-cell:hover {
   font-family: var(--mono);
   font-size: 11px;
 }
+
+/* ------------------------------------------------------- the overview card
+
+   The whole result for whatever the page is filtered to, restated on every
+   filter. It sits above the charts because the first question is always "how
+   did this do", and the tables below answer "where". */
+
+.sampleconv .scorecard {
+  padding: 18px 20px 14px;
+  margin-bottom: 16px;
+}
+
+.score-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.score-head h2 {
+  margin: 2px 0 0;
+  font-size: 20px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.score-rate {
+  text-align: right;
+  min-width: 200px;
+}
+
+.score-rate strong {
+  display: block;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-rate > span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.score-delta {
+  font-weight: 650;
+}
+
+.score-delta.up {
+  color: var(--good);
+}
+
+.score-delta.down {
+  color: var(--critical);
+}
+
+.score-figs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1px;
+  margin: 16px 0 0;
+  padding: 0;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.score-fig {
+  padding: 10px 12px;
+  background: var(--surface);
+}
+
+.score-fig dt {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.score-fig dd {
+  margin: 2px 0 0;
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  /* A buyer's name goes here beside the money figures; it must not wrap the
+     tile to two heights or push the row out of line. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-fig small {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+/* The shape of the year, on the card itself. Each quarter filters the page. */
+.score-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.score-q {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.score-q:hover {
+  background: var(--surface-sunk);
+}
+
+.score-q.active {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.score-q.empty {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.score-q-bar {
+  display: block;
+  position: relative;
+  height: 26px;
+  width: 8px;
+  border-radius: 2px;
+  background: var(--surface-sunk);
+  overflow: hidden;
+}
+
+.score-q-bar i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: var(--series-1);
+}
+
+.score-q b {
+  font-size: 12.5px;
+}
+
+.score-q > span:last-child {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .score-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .score-rate {
+    text-align: left;
+  }
+}
+
+/* A quarter whose samples have not had time to convert: its bar can only grow,
+   so it is marked rather than read as a fall. */
+.score-q.filling .score-q-bar i {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--series-1) 0 3px,
+    color-mix(in srgb, var(--series-1) 40%, transparent) 3px 6px
+  );
+}
+
+.score-q-open {
+  margin-left: 3px;
+  color: var(--warning);
+  font-style: normal;
+}
+
+/* A quarter from before the reference was recorded: shown, but as a floor. */
+.score-q.partial .score-q-bar i {
+  background: color-mix(in srgb, var(--series-1) 45%, transparent);
+}
+
+/* ------------------------------------------------ the overview card on a phone
+
+   The card is the thing a VP reads on a phone, so it is the part worth fitting
+   properly: two columns of figures rather than four stacked tiles, and a rate
+   that leads without filling the screen. Everything else on the page already
+   scrolls or reflows through the shared rules. */
+
+@media (max-width: 640px) {
+  .sampleconv .scorecard {
+    padding: 14px 14px 12px;
+  }
+
+  .score-head {
+    gap: 10px;
+  }
+
+  .score-head h2 {
+    font-size: 17px;
+  }
+
+  .score-rate {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .score-rate strong {
+    font-size: 32px;
+  }
+
+  /* Two across: the container is ~300px inside the card's padding, so the
+     160px floor would fall back to a single column. */
+  .score-figs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .score-fig {
+    padding: 8px 10px;
+  }
+
+  .score-fig dd {
+    font-size: 16px;
+  }
+
+  .score-fig small {
+    font-size: 11px;
+  }
+
+  .score-q {
+    padding: 5px 8px;
+    gap: 6px;
+  }
+
+  /* The search box owns its own row rather than being squeezed beside the
+     chips it filters. */
+  .sampleconv .chips-search {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* The drill-down keeps its own scroll track: it is a table inside a table cell,
+   and on a phone it is wider than both. */
+.sampleconv .drill-body {
+  max-width: 100vw;
+}

@@ -26,7 +26,7 @@ if (root) {
     asOf: $<HTMLElement>('#as-of'),
     errorBanner: $<HTMLElement>('#error-banner'),
     quality: $<HTMLElement>('#quality'),
-    kpis: $<HTMLElement>('#kpis'),
+    scorecard: $<HTMLElement>('#scorecard'),
     chartTrend: $<HTMLElement>('#chart-trend'),
     chartValue: $<HTMLElement>('#chart-value'),
     trendNote: $<HTMLElement>('#trend-note'),
@@ -49,7 +49,7 @@ if (root) {
 
   const state = {
     fy: Number(root.dataset.fy ?? new Date().getFullYear()),
-    company: 'all',
+    company: 'zipper',
     quarter: '',
     /** Which of buyer / team / salesperson / marketer / region is on screen. */
     dimension: 'buyer',
@@ -98,11 +98,6 @@ if (root) {
         });
   };
 
-  const tile = (label: string, value: string, sub: string, tone?: 'warn' | 'good') =>
-    `<div class="kpi${tone ? ` ${tone}` : ''}"><div class="label">${esc(
-      label,
-    )}</div><div class="value">${esc(value)}</div><div class="sub">${sub}</div></div>`;
-
   /* ------------------------------------------------------------ fetching */
 
   function query(): string {
@@ -127,7 +122,7 @@ if (root) {
       : 'Building the fiscal year';
     el.errorBanner.hidden = true;
     if (!state.data) {
-      el.kpis.innerHTML = skeleton.chips(5);
+      el.scorecard.innerHTML = skeleton.chips(5);
       el.chartTrend.innerHTML = skeleton.chart();
       el.chartValue.innerHTML = skeleton.chart();
     }
@@ -169,7 +164,7 @@ if (root) {
       (d.quarter ? ` · ${d.quarter.replace('-', ' ')} only` : '');
 
     renderQuality();
-    renderKpis();
+    renderScorecard();
     renderCharts();
     renderQuarters();
     renderDimension();
@@ -212,7 +207,7 @@ if (root) {
           .map((q: any) => q.label)
           .join(', ')} is still open.</strong> Nine conversions in ten land within ${count(
           days,
-        )} days of the sample, so its rate can only rise. The headline rate below counts only samples older than that.`,
+        )} days of the sample, so its figures can only rise — and the year's rate with them. The trend on the card is measured across settled quarters only, for that reason.`,
       );
     }
 
@@ -220,30 +215,149 @@ if (root) {
     el.quality.innerHTML = notes.map((n) => `<p>${n}</p>`).join('');
   }
 
-  function renderKpis() {
-    const t = state.data.totals;
-    el.kpis.innerHTML = [
-      tile('Samples raised', count(t.raised), state.data.label),
-      tile(
-        'Converted to bulk',
-        count(t.converted),
-        `${pct(t.rate)} of every sample raised`,
-        t.converted ? 'good' : undefined,
-      ),
-      tile(
-        'Conversion rate',
-        pct(t.matureRate),
-        t.pending
-          ? `of the ${count(t.matureRaised)} old enough to judge · ${count(t.pending)} still open`
-          : 'every sample is old enough to judge',
-      ),
-      tile('Bulk value won', money(t.bulkValue), 'ex tax, from the orders naming a sample'),
-      tile(
-        'Sample to order',
-        t.medianLag === null ? '—' : `${count(t.medianLag)} days`,
-        'median, sample raised to first bulk order',
-      ),
-    ].join('');
+  /**
+   * The overview: the whole result for whatever the page is filtered to.
+   *
+   * Written for someone who will read this line and nothing else, so it says
+   * what the development effort returned rather than how many rows there are.
+   * The rate is the plain one — conversions over samples raised — so it always
+   * agrees with the sentence beside it; the caveat that recent samples have not
+   * had time to convert is in the banner above, where it cannot be mistaken for
+   * a figure.
+   */
+  function renderScorecard() {
+    const d = state.data;
+    const t = d.totals;
+    const base = d.baseline ?? t;
+    const unit = d.company === 'mt' ? 'Metal Trims' : 'Zipper';
+
+    // What the reader is actually looking at, in the order they chose it.
+    const scope = [unit, d.label, d.quarter ? d.quarter.split('-')[1] : '', state.q]
+      .filter(Boolean)
+      .join(' · ');
+    const narrowed = !!(d.quarter || state.q);
+
+    // Narrowed, the useful comparison is against the unit. Whole, it is the
+    // direction of travel across the year.
+    //
+    // Only quarters that are both SETTLED and fully RECORDED are compared.
+    //
+    // A quarter whose samples are still too young to have converted always
+    // looks like a collapse — this year's Q2 reads 9.0% against Q1's 14.6%
+    // purely because half its samples have not had time. And a quarter from
+    // before the unit started writing the sample number on bulk orders is a
+    // floor, so measuring the year's improvement from it would credit the
+    // record-keeping to the sales team: Zipper's FY 25-26 reads ▲16.4% off
+    // Q1, of which most is simply the reference being written down from
+    // August. Against Q3, the first quarter that is both settled and fully
+    // recorded, the real movement is ▲9.8%.
+    const settled = (d.quarters as any[]).filter((q) => q.raised && q.mature && q.recorded);
+    let against: string;
+    if (narrowed) {
+      const delta = t.rate - base.rate;
+      against = `<span class="score-delta ${delta >= 0 ? 'up' : 'down'}">${
+        delta >= 0 ? '▲' : '▼'
+      } ${pct(Math.abs(delta))}</span> against ${pct(base.rate)} for ${esc(unit)} this year`;
+    } else if (settled.length > 1) {
+      const first = settled[0];
+      const last = settled[settled.length - 1];
+      const delta = last.rate - first.rate;
+      against = `<span class="score-delta ${delta >= 0 ? 'up' : 'down'}">${
+        delta >= 0 ? '▲' : '▼'
+      } ${pct(Math.abs(delta))}</span> ${esc(last.label)} ${pct(last.rate)} against ${esc(
+        first.label,
+      )} ${pct(first.rate)}`;
+    } else if (settled.length === 1) {
+      against = `${esc(settled[0].label)} settled at ${pct(
+        settled[0].rate,
+      )}; the later quarters are still filling`;
+    } else {
+      against = 'of the samples developed';
+    }
+
+    const figure = (label: string, value: string, sub: string) =>
+      `<div class="score-fig"><dt>${esc(label)}</dt><dd>${value}</dd><small>${sub}</small></div>`;
+
+    // Who the money came from. The breakdown is ordered by development effort,
+    // so the biggest earner has to be picked out of it.
+    const buyers = (d.breakdowns?.buyer ?? []) as any[];
+    const top = buyers.reduce(
+      (best, b) => (!best || b.bulkValue > best.bulkValue ? b : best),
+      null as any,
+    );
+    const topShare = top && t.bulkValue ? top.bulkValue / t.bulkValue : 0;
+
+    // A strip of the four quarters, so the shape of the year is on the card
+    // itself rather than only in the table further down.
+    const widest = Math.max(...d.quarters.map((q: any) => q.rate), 0.0001);
+    const strip = d.quarters
+      .map(
+        (q: any) => `<button class="score-q${state.quarter === q.key ? ' active' : ''}${
+          q.raised ? '' : ' empty'
+        }${q.raised && !q.mature ? ' filling' : ''}${
+          q.raised && !q.recorded ? ' partial' : ''
+        }" type="button" data-quarter="${esc(q.key)}" title="${esc(q.span)} — ${
+          q.raised
+            ? `${count(q.converted)} of ${count(q.raised)} samples, ${money(q.bulkValue)}${
+                q.mature ? '' : ' — still filling, this can only rise'
+              }${
+                q.recorded
+                  ? ''
+                  : ' — before the sample number was recorded, so this is a floor'
+              }`
+            : 'no samples'
+        }">
+          <span class="score-q-bar"><i style="height:${
+            q.raised ? Math.max((q.rate / widest) * 100, 3).toFixed(0) : 0
+          }%"></i></span>
+          <b>${esc(q.label)}${
+            q.raised && !q.mature
+              ? '<i class="score-q-open" title="still filling">•</i>'
+              : q.raised && !q.recorded
+                ? '<i class="score-q-open" title="a floor — before the sample number was recorded">~</i>'
+                : ''
+          }</b>
+          <span>${q.raised ? pct(q.rate) : '—'}</span>
+        </button>`,
+      )
+      .join('');
+
+    el.scorecard.innerHTML = `
+      <div class="score-head">
+        <div>
+          <p class="eyebrow">${esc(scope)}</p>
+          <h2>${count(t.converted)} of ${count(t.raised)} samples won a bulk order</h2>
+        </div>
+        <div class="score-rate">
+          <strong>${pct(t.rate)}</strong>
+          <span>${against}</span>
+        </div>
+      </div>
+      <dl class="score-figs">
+        ${figure(
+          'Bulk value won',
+          money(t.bulkValue),
+          'ex tax, on the orders these samples won',
+        )}
+        ${figure(
+          'Return per sample',
+          money(t.raised ? t.bulkValue / t.raised : 0),
+          'across every sample developed, won or not',
+        )}
+        ${figure(
+          'Sample to order',
+          t.medianLag === null ? '—' : `${count(t.medianLag)} days`,
+          'median wait for the first bulk order',
+        )}
+        ${figure(
+          'Biggest earner',
+          top ? esc(top.name) : '—',
+          top
+            ? `${money(top.bulkValue)} · ${pct(topShare)} of the value won`
+            : 'nothing won yet',
+        )}
+      </dl>
+      <div class="score-strip">${strip}</div>`;
   }
 
   function renderCharts() {
@@ -640,13 +754,16 @@ if (root) {
     reload();
   });
 
-  // Clicking a quarter row filters to it; clicking it again clears the filter.
-  el.quarterGrid.addEventListener('click', (event) => {
-    const tr = (event.target as HTMLElement).closest<HTMLElement>('[data-quarter]');
-    if (!tr) return;
-    state.quarter = state.quarter === tr.dataset.quarter ? '' : tr.dataset.quarter!;
+  // Clicking a quarter filters to it; clicking it again clears the filter.
+  // Both the card's strip and the table row do the same thing.
+  const pickQuarter = (event: Event) => {
+    const hit = (event.target as HTMLElement).closest<HTMLElement>('[data-quarter]');
+    if (!hit) return;
+    state.quarter = state.quarter === hit.dataset.quarter ? '' : hit.dataset.quarter!;
     reload();
-  });
+  };
+  el.quarterGrid.addEventListener('click', pickQuarter);
+  el.scorecard.addEventListener('click', pickQuarter);
 
 
   el.dimGrid.addEventListener('click', (event) => {
