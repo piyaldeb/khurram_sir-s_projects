@@ -138,17 +138,22 @@ export function fyOf(iso: string): number {
 export const todayIso = () => new Date().toISOString().slice(0, 10);
 
 /**
- * The years worth offering.
+ * The first year worth offering.
  *
- * Metal Trims has recorded the reference since mid-2023, so FY 23-24 onwards
- * has something to say. Zipper only joins in FY 25-26; its earlier years are
- * shown as unrecorded rather than hidden, because "we did not write it down"
- * and "no sample converted" must not look the same.
+ * Zipper did not start writing the sample number on bulk orders until August
+ * 2025, so FY 23-24 and FY 24-25 have nothing to say about the larger of the
+ * two units — a Zipper conversion rate for those years would be a rate of
+ * roughly zero, and reading it as a bad year rather than an unrecorded one is
+ * the mistake the whole page is built to avoid. Metal Trims does reach back to
+ * 2023, but a year that can only be read for one unit is not a year this
+ * report can be trusted on.
  */
+const FIRST_FY = 2025;
+
 export function availableFys(): number[] {
   const current = fyOf(todayIso());
   const out: number[] = [];
-  for (let y = 2023; y <= current; y++) out.push(y);
+  for (let y = FIRST_FY; y <= current; y++) out.push(y);
   return out;
 }
 
