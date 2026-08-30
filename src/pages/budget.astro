@@ -131,9 +131,9 @@ const connectionLabel = session
           <p class="hint" id="month-note"></p>
 
           <div class="presets">
+            <button class="chip primary" type="button" id="add-day">+ Add a working day</button>
             <button class="chip" type="button" id="reset-days">Reset calendar</button>
             <button class="chip" type="button" id="drop-empty">Drop non-producing days</button>
-            <button class="chip" type="button" id="add-day">Add a day</button>
             <button class="chip" type="button" id="export">Export CSV</button>
           </div>
         </section>
@@ -210,6 +210,33 @@ const connectionLabel = session
       </section>
     </section>
   </main>
+
+  <!-- Adding a working day the plan skipped: the factory opens on a holiday
+       often enough that the calendar has to be editable, and every figure on
+       the sheet is divided by the number of working days. -->
+  <dialog class="daydialog" id="day-dialog" aria-labelledby="day-dialog-title">
+    <form class="daydialog-body" id="day-form">
+      <header class="daydialog-head">
+        <h2 id="day-dialog-title">Add a working day</h2>
+        <p class="hint" id="day-dialog-sub"></p>
+      </header>
+
+      <div class="daydialog-groups" id="day-suggest"></div>
+
+      <label class="daydialog-field">
+        <span>Or pick any date</span>
+        <input type="date" id="day-date" required />
+      </label>
+
+      <p class="daydialog-error" id="day-error" hidden></p>
+
+      <footer class="daydialog-actions">
+        <span class="hint" id="day-hint"></span>
+        <button class="btn" type="button" id="day-cancel">Cancel</button>
+        <button class="btn primary" type="submit" id="day-confirm">Add day</button>
+      </footer>
+    </form>
+  </dialog>
 
   <script src="../scripts/budget.ts"></script>
 </Base>

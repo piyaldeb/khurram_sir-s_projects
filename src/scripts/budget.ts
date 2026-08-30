@@ -6,13 +6,17 @@
  * from the planning workbook; production is fetched from Odoo.
  */
 import {
+  addDay,
   computeBudget,
   defaultDays,
   emptyDoc,
+  inMonth,
   monthLabel,
   planFor,
+  removeDay,
   renumber,
   todayIso,
+  type BudgetDay,
   type BudgetDoc,
   type BudgetView,
 } from '../lib/budget';
@@ -59,6 +63,15 @@ if (root) {
     periodState: $<HTMLElement>('#period-state'),
     periodHeading: $<HTMLElement>('#period-heading'),
     periodSub: $<HTMLElement>('#period-sub'),
+    dayDialog: $<HTMLDialogElement>('#day-dialog'),
+    dayForm: $<HTMLFormElement>('#day-form'),
+    daySub: $<HTMLElement>('#day-dialog-sub'),
+    daySuggest: $<HTMLElement>('#day-suggest'),
+    dayDate: $<HTMLInputElement>('#day-date'),
+    dayError: $<HTMLElement>('#day-error'),
+    dayHint: $<HTMLElement>('#day-hint'),
+    dayConfirm: $<HTMLButtonElement>('#day-confirm'),
+    dayCancel: $<HTMLButtonElement>('#day-cancel'),
   };
 
   type View = 'month' | 'fy' | 'ytd';
@@ -437,6 +450,7 @@ if (root) {
     const today = todayIso();
     const perDay = s.perDayRequired;
     const doc = state.doc;
+    const planned = new Set(planFor(doc.month)?.workingDays ?? []);
 
     const head = `<thead>
       <tr class="group-row">
@@ -469,9 +483,19 @@ if (root) {
               ? '<span class="rail-sub">to come</span>'
               : '';
 
-        return `<tr class="${rowClass(r)}">
+        // Extra days are the ones someone added by hand; the plan does not have
+        // them, so they are marked and the remove control is emphasised.
+        const added = !planned.has(r.date);
+
+        return `<tr class="${rowClass(r)}" data-date="${esc(r.date)}">
           <td class="sticky-col num">${String(r.day).padStart(2, '0')}</td>
-          <td class="date-cell">${dayDate(r.date)} ${tag}</td>
+          <td class="date-cell">${dayDate(r.date)} ${
+            added ? '<span class="tag added">added</span>' : ''
+          }${tag}<button class="row-del" type="button" data-del="${esc(
+            r.date,
+          )}" title="Remove ${esc(shortDate(r.date))} from the working calendar" aria-label="Remove ${esc(
+            shortDate(r.date),
+          )} from the working calendar">&times;</button></td>
           <td class="num"><input class="cell num${
             r.auto ? ' auto' : ''
           }" type="number" step="1" data-i="${i}" data-k="zipper" value="${r.zipper ?? ''}" /></td>
@@ -498,7 +522,7 @@ if (root) {
     )}</tfoot></table>`;
 
     el.monthNote.textContent =
-      'All working days, none collapsed. Tinted cells came from Odoo; typing over one makes it yours until the next sync. Today is shown, tagged, and left out of the average and the run rate.';
+      'All working days, none collapsed. Tinted cells came from Odoo; typing over one makes it yours until the next sync. Today is shown, tagged, and left out of the average and the run rate. Add a day the factory opened on with the button below, or remove one with the × beside its date — every figure on the sheet is divided by the working days, so both recalculate the whole month.';
   }
 
   /**
@@ -895,41 +919,232 @@ if (root) {
     { passive: true },
   );
 
+  /* ------------------------------------------------- editing the calendar */
+
+  /**
+   * Commits a change to the working calendar and saves it.
+   *
+   * The daily figures are a what-if until saved, but the calendar is not: a
+   * sync rebuilds the month from the *stored* document, so an added day that
+   * only lived in the browser would be thrown away by the next fetch - and the
+   * fetch is exactly what fills it in. Saving first is what makes it stick.
+   */
+  async function commitDays(days: BudgetDay[]) {
+    state.doc.days = days;
+    markDirty();
+    renderMonth();
+    await save();
+  }
+
+  /** Draws attention to a row after the calendar moves under the reader. */
+  function flashRow(date: string) {
+    const tr = el.monthGrid.querySelector<HTMLElement>(`tr[data-date="${date}"]`);
+    if (!tr) return;
+    tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    tr.classList.remove('flash');
+    void tr.offsetWidth; // restart the animation if the same row flashes twice
+    tr.classList.add('flash');
+  }
+
   el.monthGrid.addEventListener('click', (event) => {
     const btn = (event.target as HTMLElement).closest<HTMLElement>('[data-del]');
     if (!btn) return;
-    state.doc.days.splice(Number(btn.dataset.del), 1);
-    state.doc.days = renumber(state.doc.days);
-    markDirty();
-    renderMonth();
+    const date = String(btn.dataset.del);
+    const day = state.doc.days.find((d) => d.date === date);
+    if (!day) return;
+
+    // Removing a day moves every figure on the sheet - the per-day target, the
+    // run rate, each cumulative row - so it always asks first, and says what
+    // leaves with the day when the day produced.
+    const total = (day.zipper ?? 0) + (day.mt ?? 0);
+    if (
+      !confirm(
+        `Remove ${shortDate(date)} from the working calendar?
+
+` +
+          (total > 0
+            ? `Its ${money(total)} of production leaves the totals with it, and the month drops to ${
+                state.doc.days.length - 1
+              } working days.`
+            : `The month drops to ${state.doc.days.length - 1} working days, so the per-day target and the run rate are recalculated.`),
+      )
+    )
+      return;
+
+    // Keep what the day produced on the doc, so putting the date back is one
+    // click and does not need Odoo asked again.
+    if (total > 0) {
+      state.doc.offCalendar = [
+        ...(state.doc.offCalendar ?? []).filter((d) => d.date !== date),
+        { date, zipper: day.zipper ?? 0, mt: day.mt ?? 0 },
+      ].sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    void commitDays(removeDay(state.doc.days, date));
   });
 
   $('#reset-days').addEventListener('click', () => {
-    const kept = new Map(state.doc.days.map((d) => [d.date, d]));
     const plan = planFor(state.doc.month);
     const dates = plan ? plan.workingDays : defaultDays(state.doc.month).map((d) => d.date);
-    state.doc.days = renumber(
-      dates.map((date, i) => kept.get(date) ?? { day: i + 1, date, zipper: null, mt: null }),
+
+    // Reset means "back to the workbook", which throws away days added by hand.
+    const planned = new Set(dates);
+    const added = state.doc.days.filter((d) => !planned.has(d.date));
+    if (
+      added.length &&
+      !confirm(
+        `${added.map((d) => shortDate(d.date)).join(', ')} ${
+          added.length === 1 ? 'was' : 'were'
+        } added by hand and ${added.length === 1 ? 'is' : 'are'} not in the workbook. ` +
+          'Resetting drops them. Continue?',
+      )
+    )
+      return;
+
+    const kept = new Map(state.doc.days.map((d) => [d.date, d]));
+    void commitDays(
+      renumber(
+        dates.map((date, i) => kept.get(date) ?? { day: i + 1, date, zipper: null, mt: null }),
+      ),
     );
-    markDirty();
-    renderMonth();
   });
 
   $('#drop-empty').addEventListener('click', () => {
-    state.doc.days = renumber(state.doc.days.filter((d) => (d.zipper ?? 0) + (d.mt ?? 0) > 0));
-    markDirty();
-    renderMonth();
+    void commitDays(renumber(state.doc.days.filter((d) => (d.zipper ?? 0) + (d.mt ?? 0) > 0)));
   });
 
+  /* ------------------------------------------------------ add-a-day dialog */
+
+  /** Every date of the month, so the picker can offer the ones not yet in use. */
+  const monthDates = (month: string) => defaultDays(month).map((d) => d.date);
+
+  const weekday = (iso: string) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
+      weekday: 'long',
+      timeZone: 'UTC',
+    });
+
+  const dayChip = (date: string, sub: string, tone = '') =>
+    `<button class="chip day-chip${tone ? ` ${tone}` : ''}" type="button" data-add="${esc(
+      date,
+    )}"><b>${esc(shortDate(date))}</b><span>${esc(weekday(date))}${
+      sub ? ` · ${sub}` : ''
+    }</span></button>`;
+
+  function renderDayDialog() {
+    const doc = state.doc;
+    const inCalendar = new Set(doc.days.map((d) => d.date));
+    const free = monthDates(doc.month).filter((d) => !inCalendar.has(d));
+
+    // Odoo invoiced on these but the calendar skips them - the whole reason
+    // this dialog exists, so they come first and carry the amount.
+    const invoiced = new Map(
+      (doc.offCalendar ?? [])
+        .filter((d) => inMonth(d.date, doc.month) && !inCalendar.has(d.date))
+        .map((d) => [d.date, d.zipper + d.mt] as const),
+    );
+
+    el.daySub.textContent = free.length
+      ? `${monthLabel(doc.month)} has ${doc.days.length} working ${
+          doc.days.length === 1 ? 'day' : 'days'
+        }. Adding one renumbers the sheet and recalculates the per-day target, the run rate and every cumulative figure.`
+      : `Every date in ${monthLabel(doc.month)} is already a working day.`;
+
+    const groups: string[] = [];
+    if (invoiced.size) {
+      groups.push(
+        `<section class="day-group">
+          <h3>Odoo invoiced on ${invoiced.size === 1 ? 'this day' : 'these days'}</h3>
+          <p class="hint">Production the calendar is not counting - almost always a holiday the factory ended up opening on.</p>
+          <div class="day-chips">${[...invoiced.keys()]
+            .sort()
+            .map((d) => dayChip(d, money(invoiced.get(d)!), 'suggested'))
+            .join('')}</div>
+        </section>`,
+      );
+    }
+
+    const rest = free.filter((d) => !invoiced.has(d));
+    if (rest.length) {
+      groups.push(
+        `<section class="day-group">
+          <h3>${invoiced.size ? 'Other dates not in the calendar' : 'Dates not in the calendar'}</h3>
+          <div class="day-chips">${rest.map((d) => dayChip(d, '')).join('')}</div>
+        </section>`,
+      );
+    }
+
+    el.daySuggest.innerHTML = groups.join('');
+
+    const first = invoiced.size ? [...invoiced.keys()].sort()[0] : rest[0];
+    el.dayDate.value = first ?? '';
+    el.dayDate.min = `${doc.month}-01`;
+    el.dayDate.max = monthDates(doc.month).at(-1)!;
+    el.dayConfirm.disabled = !free.length;
+    el.dayHint.textContent =
+      state.odoo && free.length ? 'A day with no figures is fetched from Odoo once it is added.' : '';
+    el.dayError.hidden = true;
+  }
+
+  function dayError(message: string) {
+    el.dayError.textContent = message;
+    el.dayError.hidden = false;
+  }
+
+  /**
+   * Puts a date into the calendar in its place, and gets its figures.
+   *
+   * A date the last sync already saw production on arrives filled in. Anything
+   * else is saved and then fetched, so the row is not left blank while the
+   * totals it feeds have already moved.
+   */
+  async function addWorkingDay(date: string) {
+    const doc = state.doc;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return dayError('Pick a date first.');
+    if (!inMonth(date, doc.month))
+      return dayError(`${shortDate(date)} is not in ${monthLabel(doc.month)}.`);
+    if (doc.days.some((d) => d.date === date))
+      return dayError(`${shortDate(date)} is already a working day.`);
+
+    const known = (doc.offCalendar ?? []).find((d) => d.date === date);
+    el.dayDialog.close();
+
+    await commitDays(addDay(doc.days, date, known ? { zipper: known.zipper, mt: known.mt } : undefined));
+
+    // Nothing known for the day yet: re-read the month from Odoo so the new row
+    // fills in. It has to run after the save, or the fetch would rebuild the
+    // month from the stored copy and drop the day just added.
+    if (!known && state.odoo && date <= todayIso()) {
+      await runSync('all', { months: [doc.month] });
+    }
+    flashRow(date);
+  }
+
   $('#add-day').addEventListener('click', () => {
-    const last = state.doc.days[state.doc.days.length - 1];
-    const next = last
-      ? new Date(new Date(`${last.date}T00:00:00Z`).getTime() + 86400000).toISOString().slice(0, 10)
-      : `${state.doc.month}-01`;
-    state.doc.days.push({ day: state.doc.days.length + 1, date: next, zipper: null, mt: null });
-    state.doc.days = renumber(state.doc.days);
-    markDirty();
-    renderMonth();
+    renderDayDialog();
+    el.dayDialog.showModal();
+  });
+
+  el.dayCancel.addEventListener('click', () => el.dayDialog.close());
+
+  el.daySuggest.addEventListener('click', (event) => {
+    const chip = (event.target as HTMLElement).closest<HTMLElement>('[data-add]');
+    if (!chip) return;
+    void addWorkingDay(String(chip.dataset.add));
+  });
+
+  el.dayForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void addWorkingDay(el.dayDate.value);
+  });
+
+  el.dayDate.addEventListener('input', () => {
+    el.dayError.hidden = true;
+  });
+
+  // Clicking the backdrop is the usual way out of a modal.
+  el.dayDialog.addEventListener('click', (event) => {
+    if (event.target === el.dayDialog) el.dayDialog.close();
   });
 
   const download = (name: string, lines: string[]) => {

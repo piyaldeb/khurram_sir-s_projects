@@ -57,12 +57,16 @@ export async function fillMonth(
   }
 
   // Production on a day the calendar does not list is worth surfacing: it means
-  // the working calendar and the invoicing disagree.
+  // the working calendar and the invoicing disagree — nearly always a holiday
+  // the factory ended up opening on. Recorded on the doc, with the figures, so
+  // the sheet can offer the date back and add it already filled in.
   const calendar = new Set(doc.days.map((d) => d.date));
-  const unmatched = production.days
+  const offCalendar = production.days
     .filter((d) => (d.zipper || d.mt) && !calendar.has(d.date))
-    .map((d) => d.date);
+    .map((d) => ({ date: d.date, zipper: d.zipper, mt: d.mt }));
+  const unmatched = offCalendar.map((d) => d.date);
 
+  doc.offCalendar = offCalendar;
   doc.source = { ...(doc.source ?? source), lastFilledAt: production.fetchedAt };
   doc.updatedAt = new Date().toISOString();
   await putBudget(month, doc);

@@ -71,6 +71,19 @@ export const DEFAULT_SOURCE: BudgetSource = {
   ignoreColumns: ['DATE', 'TOTAL'],
 };
 
+/**
+ * A day Odoo invoiced on that the working calendar does not list.
+ *
+ * Usually it means the factory opened on a day the plan called a holiday. The
+ * sync records them so the sheet can offer the date back for adding rather than
+ * leaving the production silently uncounted.
+ */
+export interface OffCalendarDay {
+  date: string;
+  zipper: number;
+  mt: number;
+}
+
 export interface BudgetDoc {
   /** "YYYY-MM". */
   month: string;
@@ -79,6 +92,8 @@ export interface BudgetDoc {
   /** E9 - user input. */
   mtPlan: number;
   days: BudgetDay[];
+  /** Production Odoo reported on dates `days` does not cover. */
+  offCalendar?: OffCalendarDay[];
   source?: BudgetSource | null;
   updatedAt?: string;
 }
@@ -279,6 +294,42 @@ export function renumber(days: BudgetDay[]): BudgetDay[] {
     .map((d, i) => ({ ...d, day: i + 1 }));
 }
 
+/** Does this ISO date fall inside "YYYY-MM"? */
+export function inMonth(date: string, month: string): boolean {
+  return date.slice(0, 7) === month;
+}
+
+/**
+ * Adds a working day the plan left out - a Friday the factory opened, say.
+ *
+ * The day lands in date order and every row is renumbered, so the working-day
+ * count, the per-day requirement and each row's cumulative target all move with
+ * it. Adding a date that is already there changes nothing.
+ */
+export function addDay(
+  days: BudgetDay[],
+  date: string,
+  figures?: { zipper: number; mt: number },
+): BudgetDay[] {
+  if (days.some((d) => d.date === date)) return renumber(days);
+  return renumber([
+    ...days,
+    {
+      day: 0, // renumber assigns the real one
+      date,
+      zipper: figures?.zipper ?? null,
+      mt: figures?.mt ?? null,
+      // Figures carried over from a sync are still Odoo's, not typed in.
+      auto: !!figures,
+    },
+  ]);
+}
+
+/** Drops a working day. Its production leaves the totals with it. */
+export function removeDay(days: BudgetDay[], date: string): BudgetDay[] {
+  return renumber(days.filter((d) => d.date !== date));
+}
+
 export function emptyDoc(month: string): BudgetDoc {
   const plan = planFor(month);
   return {
@@ -367,11 +418,20 @@ export function sanitiseDoc(input: any, month: string): BudgetDoc {
         }
       : DEFAULT_SOURCE;
 
+  // Written by the sync, round-tripped by the browser: kept so the "add a day"
+  // picker can still say which skipped dates Odoo actually invoiced on.
+  const offCalendar: OffCalendarDay[] = Array.isArray(input?.offCalendar)
+    ? input.offCalendar
+        .filter((d: any) => typeof d?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.date))
+        .map((d: any) => ({ date: d.date, zipper: toNum(d.zipper), mt: toNum(d.mt) }))
+    : [];
+
   return {
     month,
     zipperPlan: toNum(input?.zipperPlan),
     mtPlan: toNum(input?.mtPlan),
     days: renumber(days),
+    offCalendar,
     source,
     updatedAt: new Date().toISOString(),
   };

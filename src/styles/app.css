@@ -4614,3 +4614,245 @@ table.edd-orders td.mono {
 .is-stale::before {
   content: '⚠ ';
 }
+
+/* ------------------------------------------------- editing the working calendar
+
+   The plan's working days are the divisor for nearly every figure on the budget
+   sheet, and the factory opens on holidays often enough that the calendar has to
+   be editable. Adding and removing a day are therefore first-class controls, not
+   buried ones - but the remove control still stays out of the way until the row
+   is under the pointer, so a table of 25 days does not read as 25 buttons. */
+
+.chip.primary {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chip.primary:hover {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+/* A day someone added by hand, so it is clear which rows the workbook did not
+   plan for and which "Reset calendar" would drop. */
+.tag.added {
+  color: var(--accent);
+  background: var(--accent-wash);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+button.row-del {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 15px;
+  cursor: pointer;
+  /* Visible on every row, because a control you have to discover by hovering is
+     one nobody on a tablet ever finds - but quiet enough that 26 of them do not
+     read as a column of buttons. */
+  opacity: 0.3;
+  transition: opacity 0.12s ease;
+}
+
+tr:hover button.row-del,
+button.row-del:hover,
+button.row-del:focus-visible {
+  opacity: 1;
+}
+
+button.row-del:hover {
+  border-color: var(--critical);
+  background: color-mix(in srgb, var(--critical) 12%, transparent);
+  color: var(--critical);
+}
+
+/* The row just added, so the eye finds it after the sheet renumbers itself. */
+@keyframes row-flash {
+  from {
+    background: var(--accent-wash);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+table.month-grid tbody tr.flash td {
+  animation: row-flash 2.4s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  table.month-grid tbody tr.flash td {
+    animation: none;
+    background: var(--accent-wash);
+  }
+}
+
+/* ------------------------------------------------------- add-a-day dialog */
+
+dialog.daydialog {
+  width: min(560px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+dialog.daydialog::backdrop {
+  background: rgba(11, 11, 11, 0.45);
+}
+
+.daydialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 22px;
+  max-height: min(80vh, 720px);
+  overflow: auto;
+}
+
+.daydialog-head h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.daydialog-head .hint {
+  margin: 0;
+}
+
+.daydialog-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.day-group h3 {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.day-group .hint {
+  margin: 0 0 8px;
+}
+
+.day-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Two lines: the date, then the weekday and - where the sync knows one - the
+   amount Odoo already invoiced on it. That amount is the argument for adding
+   the day, so it is on the control that adds it. */
+.chip.day-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  line-height: 1.25;
+}
+
+.chip.day-chip b {
+  font-size: 13px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip.day-chip span {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.chip.day-chip.suggested {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.chip.day-chip.suggested span {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.daydialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.daydialog-field input {
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--plane);
+  color: var(--ink);
+  font: inherit;
+}
+
+.daydialog-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--critical) 12%, transparent);
+  color: var(--critical);
+  font-size: 12.5px;
+}
+
+.daydialog-error[hidden] {
+  display: none;
+}
+
+.daydialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.daydialog-actions .hint {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .daydialog-actions {
+    flex-wrap: wrap;
+  }
+
+  .daydialog-actions .hint {
+    flex-basis: 100%;
+  }
+}
+
+/* The date cell used to open a native picker on click; it does not any more, so
+   it should not advertise one. Room is reserved on the right for the remove
+   control so it never lands on top of the "today" / "added" tags. */
+table.month-grid td.date-cell {
+  cursor: default;
+  padding-right: 28px;
+}
+
+table.month-grid td.date-cell:hover {
+  background: inherit;
+}
