@@ -30,6 +30,7 @@ interface DemandRow {
   material: string;
   slider: string | null;
   from: { key: string; demand: number; rate: number; factor: number }[];
+  demandPending: number | null;
   demandBd: number | null;
   demandExport: number | null;
   demandTotal: number | null;
@@ -489,6 +490,11 @@ if (root) {
       : '';
 
     const inputs = `<div class="oa-stats">
+      ${
+        row.demandPending
+          ? stat('Production pending', qty(row.demandPending), 'carried in')
+          : ''
+      }
       ${row.demandBd === null ? '' : stat('Demand BD', qty(row.demandBd), 'zippers')}
       ${row.demandExport === null ? '' : stat('Export', qty(row.demandExport), 'zippers')}
       ${

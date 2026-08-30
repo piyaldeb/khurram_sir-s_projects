@@ -54,16 +54,31 @@ const SLIDER_MODEL = 'demand.plan.slider';
 const IN_TRANSIT = ['logistics', 'in_transit'];
 
 /**
- * Forecast lines firm enough to plan material against.
+ * Forecast lines firm enough to plan material against — everything but
+ * cancelled, which is what Odoo's own board counts.
  *
- * Approved alone understates badly — a third of August — because much of the
- * book is still awaiting approval when the material has to be ordered. Draft
- * and cancelled are excluded.
+ * This used to be `['approved', 'to approve']`, on the reasoning that draft is
+ * not firm. Odoo's `rm.demand.availability.dashboard` filters `state <> cancel`
+ * and nothing else, so draft counted there and not here. It happens to make no
+ * difference today (no month currently carries a draft line) and would have
+ * silently pulled the two apart the day one appeared.
  */
-const FORECAST_STATES = ['approved', 'to approve'];
+const FORECAST_CANCELLED = 'cancel';
 
-/** Everything outside Bangladesh is the sheet's Export column. */
-const EXPORT_REGION = 'OVERSEAS';
+/**
+ * Sales teams that count as Export.
+ *
+ * Odoo splits BD from Export on the TEAM name — `EXPORT (OVERSEAS)`,
+ * `EXPORT (INDIA)`, `EXPORT (VIETNAM)` are one overseas stream, matched on the
+ * prefix. This read the salesperson's REGION instead, which agrees only as
+ * long as the sole export team is the OVERSEAS one; an India or Vietnam line
+ * would have landed in BD.
+ */
+const EXPORT_TEAM_PREFIX = 'EXPORT';
+
+/** Manufacturing orders and FG packing, behind the Production Pending column. */
+const MO_MODEL = 'manufacturing.order';
+const PACKING_MODEL = 'operation.details';
 
 /* ------------------------------------------------------------- the formula */
 
@@ -157,8 +172,15 @@ export interface CategoryDemand {
   group: string;
   type: string;
   rate: number;
+  /**
+   * Production carried into the month: order qty of the manufacturing orders
+   * still open at the month's opening, less the FG packing already done
+   * against them. It is real demand on material and Odoo counts it.
+   */
+  pending: number;
   bd: number;
   export: number;
+  /** pending + bd + export — the quantity the formula is applied to. */
   total: number;
   /** What the order book is worth, from the forecast's own pricing. */
   value: number;
@@ -184,6 +206,8 @@ export interface DemandRow {
 
   /** The categories whose demand feeds this row, and what they contribute. */
   from: { key: string; demand: number; rate: number; factor: number }[];
+  /** Production carried into the month — demand on material like the rest. */
+  demandPending: number | null;
   demandBd: number | null;
   demandExport: number | null;
   demandTotal: number | null;
@@ -271,6 +295,119 @@ function monthsBack(month: string, back: number): string {
 }
 
 /** The month as Odoo's `month` date column bounds it. */
+/**
+ * The category spelling the sheet uses.
+ *
+ * Manufacturing orders are typed by hand, so "M#5  OE" with two spaces reaches
+ * here and would never meet the formula's "M#5 OE". Odoo's board collapses the
+ * whitespace for the same reason.
+ */
+const normaliseCategory = (name: string) => name.trim().toUpperCase().replace(/\s+/g, ' ');
+
+/**
+ * Production carried into the month, per FG category.
+ *
+ * The order quantity of every manufacturing order whose OA was raised on or
+ * before the month opened and which had not closed by then, less the FG packing
+ * already done against those OAs. Clamped at zero: a category packed beyond its
+ * order is finished, not negative demand.
+ *
+ * Reproduces `ppc.pending.production._product_pending`, which the board this
+ * page mirrors calls with `as_of` = the day before the month. A month that has
+ * not opened yet has no pending at all — pick September in August and only the
+ * forecast drives the demand, which is what Odoo does.
+ */
+async function fetchPending(
+  month: string,
+  context: Record<string, unknown>,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const [first] = monthBounds(month);
+  const asOf = new Date(`${first}T00:00:00Z`);
+  asOf.setUTCDate(asOf.getUTCDate() - 1);
+  const day = asOf.toISOString().slice(0, 10);
+  if (day >= new Date().toISOString().slice(0, 10)) return out;
+
+  const add = (map: Map<string, number>, key: string, qty: number) =>
+    map.set(key, (map.get(key) ?? 0) + qty);
+
+  try {
+    const orders = await readAll(
+      MO_MODEL,
+      [
+        ['company_id', '=', ZIPPER],
+        ['state', 'not in', ['cancel', 'hold']],
+        ['oa_id.create_date', '<=', `${day} 23:59:59`],
+        '|',
+        ['closing_date', '=', false],
+        ['closing_date', '>', day],
+        ['fg_categ_type', '!=', false],
+      ],
+      ['fg_categ_type', 'product_uom_qty', 'oa_id'],
+      context,
+    );
+
+    const ordered = new Map<string, number>();
+    const oaIds = new Set<number>();
+    for (const row of orders) {
+      add(ordered, normaliseCategory(String(row.fg_categ_type ?? '')), num(row.product_uom_qty));
+      if (Array.isArray(row.oa_id)) oaIds.add(Number(row.oa_id[0]));
+    }
+    if (!ordered.size) return out;
+
+    // Packing is asked for the OAs above and no others, exactly as Odoo does:
+    // packing against an OA that closed earlier is not this month's opening.
+    const packed = new Map<string, number>();
+    const ids = [...oaIds];
+    for (let i = 0; i < ids.length; i += 1000) {
+      const rows = await readAll(
+        PACKING_MODEL,
+        [
+          ['next_operation', '=', 'FG Packing'],
+          ['company_id', '=', ZIPPER],
+          ['action_date', '<=', `${day} 23:59:59`],
+          ['oa_id', 'in', ids.slice(i, i + 1000)],
+          ['fg_categ_type', '!=', false],
+        ],
+        ['fg_categ_type', 'qty'],
+        context,
+      );
+      for (const row of rows) {
+        add(packed, normaliseCategory(String(row.fg_categ_type ?? '')), num(row.qty));
+      }
+    }
+
+    for (const [category, qty] of ordered) {
+      const left = qty - (packed.get(category) ?? 0);
+      if (left > 0) out.set(category, left);
+    }
+  } catch (err) {
+    // The forecast is still worth showing without it; the page says so.
+    console.warn(`[rmdemand] production pending unavailable: ${(err as Error).message}`);
+  }
+  return out;
+}
+
+/** Reads a whole result set a page at a time; a month runs to a few thousand. */
+async function readAll(
+  model: string,
+  domain: unknown[],
+  fields: string[],
+  context: Record<string, unknown>,
+): Promise<any[]> {
+  const PAGE = 5000;
+  const out: any[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const rows = await callKw<any[]>(model, 'search_read', {
+      args: [domain, fields],
+      kwargs: { limit: PAGE, offset, order: 'id', context },
+    });
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 function monthBounds(month: string): [string, string] {
   const [y, m] = month.split('-').map(Number);
   const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
@@ -358,7 +495,12 @@ const demandStamp = () =>
  * in, marked, until Odoo answers again.
  */
 export async function demandReport(wanted?: string): Promise<DemandReport> {
-  const held = await cached<DemandReport>(`rmdemand-${wanted ?? 'latest'}`, 'rmdemand', {
+  // Bumped whenever the shape of a built report changes. The cache holds the
+  // built report, not the query, so a new field is simply absent from every
+  // entry built before it and the page shows a blank with nothing to say why.
+  // Production Pending arriving is exactly that change.
+  const SHAPE = 2;
+  const held = await cached<DemandReport>(`rmdemand-v${SHAPE}-${wanted ?? 'latest'}`, 'rmdemand', {
     // The latest month is still filling, so it is re-asked often; a named month
     // behind it only changes if someone edits history.
     ttlMs: wanted ? 6 * 60 * 60 * 1000 : 15 * 60 * 1000,
@@ -384,7 +526,7 @@ async function buildDemandReport(wanted?: string): Promise<DemandReport> {
   // what makes the report roll forward without anyone touching it.
   const monthRows = await callKw<any[]>(FORECAST_MODEL, 'read_group', {
     args: [
-      [['company_id', '=', ZIPPER], ['state', 'in', FORECAST_STATES]],
+      [['company_id', '=', ZIPPER], ['state', '!=', FORECAST_CANCELLED]],
       ['qty'],
       ['next_month'],
     ],
@@ -460,23 +602,25 @@ async function buildDemandReport(wanted?: string): Promise<DemandReport> {
   const demandOf = new Map<string, CategoryDemand>();
 
   for (const c of demandFormula.categories) {
-    demandOf.set(c.key, { ...c, bd: 0, export: 0, total: 0, value: 0 });
+    demandOf.set(c.key, { ...c, pending: 0, bd: 0, export: 0, total: 0, value: 0 });
   }
 
   try {
-    const [forecast, ledger, transit, inHouse, units, sliderNames, trailing] = await Promise.all([
+    const [forecast, pending, ledger, transit, inHouse, units, sliderNames, trailing] =
+      await Promise.all([
       callKw<any[]>(FORECAST_MODEL, 'read_group', {
         args: [
           [
             ['company_id', '=', ZIPPER],
             ['next_month', '=', month],
-            ['state', 'in', FORECAST_STATES],
+            ['state', '!=', FORECAST_CANCELLED],
           ],
           ['qty', 'total_price'],
-          ['item_category', 'sales_person_region'],
+          ['item_category', 'sales_team_id'],
         ],
         kwargs: { context, lazy: false, limit: 0 },
       }),
+      fetchPending(month, context),
       callKw<any[]>(LEDGER_MODEL, 'read_group', {
         args: [
           [['company_id', '=', ZIPPER], ['month', '>=', from], ['month', '<', to]],
@@ -563,14 +707,28 @@ async function buildDemandReport(wanted?: string): Promise<DemandReport> {
 
     /* ---- demand ---- */
     for (const row of forecast) {
-      const key = nameOf(row.item_category);
+      const key = normaliseCategory(nameOf(row.item_category));
       const held = demandOf.get(key);
       if (!held) continue;
       const qty = num(row.qty);
-      if (String(row.sales_person_region ?? '') === EXPORT_REGION) held.export += qty;
-      else held.bd += qty;
+      if (nameOf(row.sales_team_id).trim().toUpperCase().startsWith(EXPORT_TEAM_PREFIX)) {
+        held.export += qty;
+      } else {
+        held.bd += qty;
+      }
       held.total += qty;
       held.value += num(row.total_price);
+    }
+
+    // Production pending is demand on material just as the forecast is, and
+    // leaving it out understated August 2026 by 3,003,811 pieces against a
+    // forecast of 18,254,500 — a seventh of the month, and more than that on
+    // the categories carrying most of it.
+    for (const [key, qty] of pending) {
+      const held = demandOf.get(key);
+      if (!held) continue;
+      held.pending += qty;
+      held.total += qty;
     }
     report.demand = [...demandOf.values()].sort((a, b) => b.total - a.total);
 
@@ -698,6 +856,7 @@ async function buildDemandReport(wanted?: string): Promise<DemandReport> {
 
       let required = 0;
       const feeds: DemandRow['from'] = [];
+      let pending = 0;
       let bd = 0;
       let exported = 0;
       let orderValue = 0;
@@ -708,6 +867,7 @@ async function buildDemandReport(wanted?: string): Promise<DemandReport> {
           if (!d) continue;
           weighted += d.total * d.rate;
           feeds.push({ key, demand: d.total, rate: d.rate, factor: term.factor });
+          pending += d.pending;
           bd += d.bd;
           exported += d.export;
           orderValue += d.value;
@@ -756,9 +916,10 @@ async function buildDemandReport(wanted?: string): Promise<DemandReport> {
         material: row.material,
         slider: null,
         from: feeds,
+        demandPending: Math.round(pending),
         demandBd: Math.round(bd),
         demandExport: Math.round(exported),
-        demandTotal: Math.round(bd + exported),
+        demandTotal: Math.round(pending + bd + exported),
         demandValue: Math.round(orderValue),
         required: round(required),
         requiredValue: cost.rate === null ? null : Math.round(required * cost.rate),
@@ -935,6 +1096,7 @@ async function sliderRows(
       material: 'STI Slider',
       slider: name,
       from: [],
+      demandPending: null,
       demandBd: null,
       demandExport: null,
       demandTotal: null,
