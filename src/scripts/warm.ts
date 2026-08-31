@@ -31,6 +31,12 @@ function currentFy() {
   return now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
 }
 
+/** The month a monthly report opens on. */
+function currentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
 /**
  * Heaviest first: the long ones benefit most from a head start.
  *
@@ -40,6 +46,9 @@ function currentFy() {
 function targets() {
   const fy = currentFy();
   return [
+    // Costing a month reads the order book, every BOM behind it and a year of
+    // purchase history, so it is the longest cold build on the site.
+    `/api/rm-cost?month=${currentMonth()}`,
     `/api/buyer-edd?fy=${fy}`,
     `/api/sample-leadtime?fy=${fy}&dataset=bulk&company=zipper`,
     '/api/ccr',

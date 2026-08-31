@@ -778,6 +778,119 @@ the month in progress ages out after fifteen minutes. A cold cache fills four mo
 request and the page asks again until nothing is pending — 41 months takes about two minutes,
 the same as Production ABC. Raw lines are never stored.
 
+## BOM against actual
+
+`/rm-cost`. What the BOM says a month's material should have cost, against what
+the store actually issued. One page: two bars on one scale, the months behind
+them, and three lists of five.
+
+Two controls: a **month**, or **every month with data**.
+
+### Where the numbers come from
+
+| Model | Side | Carries |
+|---|---|---|
+| `sale.order` | standard | the bulk order book — `sales_type = 'oa'`, confirmed, Zipper |
+| `sale.order.line` | standard | the consumption fields the standard is built on |
+| `mrp.bom.line` | standard | which components a zipper uses, and `material_type` for each |
+| `product.template` | standard | `fg_categ_type`, which decides which consumption fields apply |
+| `purchase.order.line` | standard | what each component costs to buy |
+| `rm.stock.detailed.monthly` | actual | `issue_qty` / `issue_value` — what left the store |
+
+The two sides are joined on the **product id**, not on a category name. A name
+map would be one Odoo rename away from silently reporting a material as
+unaccounted for; the product id is the same key the BOM itself uses. Anything
+issued whose product carries no BOM line falls into "issued with no BOM", which
+is a finding rather than an error — see below.
+
+### The BOM does not carry the quantity
+
+This is the trap, and it is worth stating plainly because the data invites the
+mistake.
+
+`mrp.bom.line.product_qty` looks like a per-unit consumption and is not usable
+as one. It holds whatever `fg.product.formula` returned for the order line that
+first created the BOM, and `create_bom_and_link_mo` then reuses that BOM for
+every later line sharing its code — so the number belongs to some other order.
+
+Odoo's own planner knows this and never reads it. `_prepare_requisition_lines`
+in `taps_manufacturing_plan` walks the BOM for the component list and then calls
+`_get_consumption_qty`, which reads the **sale order line's** own fields:
+
+| Material type | Quantity from |
+|---|---|
+| tape / slider / wire | `tape_con`, `slider_con`, `wire_con` |
+| top / bottom / pinbox, metal and aluminium | `topwire_con`, `botomwire_con`, `pinbox_con` |
+| top / bottom / pinbox / pom, everything else | `tbwire_con`, split evenly across those BOM lines |
+
+Metal is decided the way the planner decides it: the FG category name starting
+with M or A.
+
+Checked against a real line — BOM 11505 carries pinbox 1.03, the order line
+1,575 pieces, and `pinbox_con` is 1,622.25, which is 1.03 x 1,575 exactly.
+
+### What a component costs
+
+`standard_price` is **0.00 on every raw material in this database**, so a
+standard built on it would be zero. The cost comes from `purchase.order.line`
+instead: a year of ordering, weighted by quantity, falling back to the last
+price paid where a year holds none. A component that has never been purchased is
+named in the coverage note rather than silently costed at zero.
+
+### The gap is not a clean measurement, and the page says so
+
+Two things stop this being a true variance, and both are printed under the
+figures rather than left for someone to discover:
+
+- **Timing.** The standard is the BOM's claim on orders *booked* in the month;
+  the ledger is material *issued* in it. An order booked in July is cut in
+  August, so one month compares two slightly different populations. Month to
+  month the gap swings hard — April +$196k, May -$92k, June +$130k — and settles
+  only over the run. **Every month** is the honest view; a single month is
+  indicative.
+- **Valuation.** The ledger prices an issue at the lot's own landed cost; the
+  standard prices it at a year of purchase orders weighted by quantity. A few
+  points of any gap are that difference rather than consumption.
+
+### Issued with no BOM
+
+About a tenth of what the store issues has no BOM line behind it at all —
+dipping, plating and painting chemicals, dyes, ETP, cartons and packing. It is
+real money with no standard to measure it against, so it is called out as its
+own figure and its own card instead of being folded into the gap or dropped.
+
+Some of it is a genuine gap in the BOM rather than a category that was never
+modelled: `M#4 ZINC TOP RAW` turning up under END PART is a component that
+should carry a BOM line and does not.
+
+### What it cannot see
+
+- BOM linking began in **March 2026**, when `create_bom_and_link_mo` went in, so
+  `EARLIEST_MONTH` starts the report there.
+- Only **Zipper** stamps a BOM on its orders. Metal Trims is not in this report.
+- Labour, overhead and freight are not in either side.
+
+### Reading it
+
+The headline is the gap as a percentage of standard, and the two bars beneath it
+are drawn on one scale so the difference is seen rather than worked out from two
+figures. The hatched block at the end of the issued bar is the material with no
+BOM behind it.
+
+The month strip shows each month's gap, signed, over two lines — dashed for the
+standard, solid for what was issued. Clicking a month opens it.
+
+Then three cards, five rows each: where the BOM missed by material type, what
+was issued with no BOM, and the single components that ran furthest over.
+
+### Cost and caching
+
+A month is every bulk line, the BOMs behind them, a year of purchase history per
+component and the RM ledger: about 30-50 seconds cold. Slices are cached per
+month, keyed `rmcost-v<shape>-<month>`, stamped on `sale.order` for the window. A
+closed month is held for 12 hours and may be served stale while it rebuilds; the
+month in progress for 30 minutes (`RM_COST_CACHE_MS`).
+
 ## Layout
 
 ```
@@ -793,6 +906,7 @@ src/
     formula.ts     evaluates the SUM formulas Odoo leaves uncached
     budget.ts      the budget sheet's model, formulas and fiscal-year helpers
     production.ts  daily Zipper / MT production, read from Odoo
+    rmcost.ts      BOM standard against what the store actually issued
     backfill.ts    fills and saves a run of months
     summary.ts     fiscal-year / year-to-date rollups
     fxrate.ts      today's USD/BDT rate, looked up and cached

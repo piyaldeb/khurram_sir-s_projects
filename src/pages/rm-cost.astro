@@ -1,0 +1,83 @@
+---
+import Base from '../layouts/Base.astro';
+import { config, getSession } from '../lib/odoo';
+import { availableMonths, monthLabel, todayMonth } from '../lib/rmcost';
+
+export const prerender = false;
+
+let session: Awaited<ReturnType<typeof getSession>> | null = null;
+let odooError: string | null = null;
+
+try {
+  session = await getSession();
+} catch (err) {
+  odooError = (err as Error).message;
+}
+
+const months = availableMonths();
+const current = todayMonth();
+
+const connectionLabel = session
+  ? `${session.userName} · ${session.db} · ${new URL(config.url).host}`
+  : 'Not connected';
+---
+
+<Base title="BOM vs actual" connected={!!session} connectionLabel={connectionLabel}>
+  <main class="main rmcost" data-month={current} data-odoo={session ? '1' : ''}>
+    <header class="rc-head">
+      <div>
+        <p class="eyebrow">Raw material · Zipper</p>
+        <h1>What the BOM says, against what we actually issued</h1>
+      </div>
+      <div class="rc-controls">
+        <select class="oa-month-pick" id="rc-month" aria-label="Month">
+          <option value="all">Every month</option>
+          {
+            months.map((m) => (
+              <option value={m} selected={m === current}>
+                {monthLabel(m)}
+              </option>
+            ))
+          }
+        </select>
+        <button class="btn" type="button" id="rc-refresh">Refresh</button>
+      </div>
+    </header>
+
+    {
+      odooError && (
+        <div class="state error panel" style="margin-top:18px">
+          <p>Odoo is not reachable.</p>
+          <p class="hint">{odooError}</p>
+        </div>
+      )
+    }
+
+    <div class="panel state" id="rc-status" hidden>
+      <h2><span class="spinner"></span> <span id="rc-status-title">Costing the order book</span></h2>
+      <p>The order book, the BOMs behind it and the raw-material ledger. The first read of a
+        month takes a minute; it is held after that.</p>
+    </div>
+
+    <div id="rc-body" hidden={!!odooError}>
+      <div class="banner" id="rc-error" hidden></div>
+
+      <!-- The claim, as one object: both totals on one scale, so the gap is
+           seen rather than worked out from two numbers. -->
+      <section class="rc-hero" id="rc-hero"></section>
+
+      <section class="rc-months" id="rc-months"></section>
+
+      <!-- Three questions the bars raise, five rows each. -->
+      <section class="rc-cards">
+        <article class="rc-card" id="rc-gaps"></article>
+        <article class="rc-card" id="rc-outside"></article>
+        <article class="rc-card" id="rc-overruns"></article>
+      </section>
+
+      <p class="rc-foot" id="rc-foot"></p>
+    </div>
+  </main>
+
+  <script src="../scripts/rmcost.ts"></script>
+</Base>
