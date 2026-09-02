@@ -169,15 +169,63 @@ export interface MonthPlan {
   zipperPlan: number;
   mtPlan: number;
   workingDays: string[];
+  /**
+   * Set when the workbook has no sheet for this month yet. The targets are the
+   * latest sheet's, carried forward, and the calendar is every day but Friday;
+   * the page opens all the same, and the user trims it once the sheet exists.
+   */
+  carriedFrom?: string;
+}
+
+const workbook = planCalendar as Record<string, MonthPlan>;
+
+/** "YYYY-MM" for the month after `month`. */
+function nextMonth(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+}
+
+/** The plant runs six days; Friday is the weekly off. */
+function sixDayCalendar(month: string): string[] {
+  return defaultDays(month)
+    .map((d) => d.date)
+    .filter((date) => new Date(`${date}T00:00:00`).getDay() !== 5);
+}
+
+/**
+ * The workbook plus whatever months have arrived since its last sheet. A new
+ * month should open on the first of the month, not when someone remembers to
+ * add a sheet — so every month up to today gets a plan, carried forward from
+ * the latest one the workbook has. Computed on each call rather than once, so
+ * a server that has been running since last month rolls over on its own.
+ */
+function calendar(): Record<string, MonthPlan> {
+  const months = Object.keys(workbook).sort();
+  const last = months[months.length - 1];
+  const thisMonth = todayIso().slice(0, 7);
+  if (!last || last >= thisMonth) return workbook;
+
+  const out: Record<string, MonthPlan> = { ...workbook };
+  const base = workbook[last];
+  for (let month = nextMonth(last); month <= thisMonth; month = nextMonth(month)) {
+    out[month] = {
+      sheet: `${monthLabel(month)} · carried from ${base.sheet}`,
+      zipperPlan: base.zipperPlan,
+      mtPlan: base.mtPlan,
+      workingDays: sixDayCalendar(month),
+      carriedFrom: base.sheet,
+    };
+  }
+  return out;
 }
 
 /** Targets and working calendar for a month, taken from the shared workbook. */
 export function planFor(month: string): MonthPlan | null {
-  return (planCalendar as Record<string, MonthPlan>)[month] ?? null;
+  return calendar()[month] ?? null;
 }
 
 export function plannedMonths(): string[] {
-  return Object.keys(planCalendar as Record<string, MonthPlan>).sort();
+  return Object.keys(calendar()).sort();
 }
 
 /** Today, as an ISO date in local time. */

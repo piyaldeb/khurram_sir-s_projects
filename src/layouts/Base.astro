@@ -62,7 +62,7 @@ const groups = [
 const activeGroup = (items: { href: string }[]) => items.some((i) => path.startsWith(i.href));
 
 /**
- * Only the budget follow-up and the OT report are open right now. Everything
+ * Only the production report, budget follow-up and OT report are open. Everything
  * else stays on the bar so nobody wonders where it went, but it is not a link:
  * no href, no pointer, and the server (src/middleware.ts) refuses the URL too.
  */
@@ -89,7 +89,7 @@ const activeGroup = (items: { href: string }[]) => items.some((i) => path.starts
           <small>Odoo · JSON-RPC</small>
         </div>
         <nav class="nav" aria-label="Sections" id="site-nav">
-          <span class="nav-link locked" aria-disabled="true">Production report</span>
+          <a href="/" class:list={['nav-link', { active: path === '/' }]}>Production report</a>
           {
             groups.map((group) => (
               <div class="nav-group" data-nav-group>

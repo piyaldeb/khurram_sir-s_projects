@@ -721,9 +721,11 @@ if (root) {
       el.saveState.textContent = `Could not load: ${(err as Error).message}`;
     }
     const plan = planFor(month);
-    el.lede.textContent = plan
-      ? `Targets and the ${plan.workingDays.length}-day working calendar come from the planning workbook. Production is read live from Odoo.`
-      : 'No workbook target for this month — set the plan below.';
+    el.lede.textContent = !plan
+      ? 'No workbook target for this month — set the plan below.'
+      : plan.carriedFrom
+        ? `The workbook has no sheet for this month yet, so the targets are carried from ${plan.carriedFrom} and the ${plan.workingDays.length}-day calendar is every day but Friday — adjust either below. Production is read live from Odoo.`
+        : `Targets and the ${plan.workingDays.length}-day working calendar come from the planning workbook. Production is read live from Odoo.`;
     renderMonth();
   }
 
