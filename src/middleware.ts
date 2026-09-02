@@ -11,6 +11,7 @@
  * taken gzip for twenty years.
  */
 import type { MiddlewareHandler } from 'astro';
+import { HOME, isOpen } from './lib/access';
 
 /** Below this, the header costs more than the compression saves. */
 const MIN_BYTES = 1024;
@@ -18,6 +19,15 @@ const MIN_BYTES = 1024;
 const COMPRESSIBLE = /^(?:text\/|application\/(?:json|javascript|xml|manifest))/i;
 
 export const onRequest: MiddlewareHandler = async (context, next) => {
+  // Only the open pages are served. Built assets pass; every other page and
+  // API route goes home, and a closed API call gets a plain refusal so a
+  // script does not receive HTML where it expected JSON.
+  const { pathname } = context.url;
+  if (!pathname.startsWith('/_astro/') && !pathname.startsWith('/favicon') && !isOpen(pathname)) {
+    if (pathname.startsWith('/api/')) return new Response('Not available', { status: 404 });
+    return context.redirect(HOME, 302);
+  }
+
   const response = await next();
 
   const accepts = context.request.headers.get('accept-encoding') ?? '';

@@ -1,5 +1,6 @@
 ---
 import '../styles/app.css';
+import { isOpen } from '../lib/access';
 
 interface Props {
   title: string;
@@ -59,6 +60,12 @@ const groups = [
   { id: 'lead', label: 'Lead time', items: lead },
 ];
 const activeGroup = (items: { href: string }[]) => items.some((i) => path.startsWith(i.href));
+
+/**
+ * Only the budget follow-up and the OT report are open right now. Everything
+ * else stays on the bar so nobody wonders where it went, but it is not a link:
+ * no href, no pointer, and the server (src/middleware.ts) refuses the URL too.
+ */
 ---
 
 <!doctype html>
@@ -82,7 +89,7 @@ const activeGroup = (items: { href: string }[]) => items.some((i) => path.starts
           <small>Odoo · JSON-RPC</small>
         </div>
         <nav class="nav" aria-label="Sections" id="site-nav">
-          <a href="/" class:list={['nav-link', { active: path === '/' }]}>Production report</a>
+          <span class="nav-link locked" aria-disabled="true">Production report</span>
           {
             groups.map((group) => (
               <div class="nav-group" data-nav-group>
@@ -97,16 +104,23 @@ const activeGroup = (items: { href: string }[]) => items.some((i) => path.starts
                   <span class="nav-caret" aria-hidden="true">▾</span>
                 </button>
                 <div class="nav-menu" id={`nav-${group.id}`} role="menu" aria-label={group.label}>
-                  {group.items.map((item) => (
-                    <a
-                      href={item.href}
-                      role="menuitem"
-                      class:list={['nav-menu-item', { active: path.startsWith(item.href) }]}
-                    >
-                      <strong>{item.label}</strong>
-                      <small>{item.hint}</small>
-                    </a>
-                  ))}
+                  {group.items.map((item) =>
+                    isOpen(item.href) ? (
+                      <a
+                        href={item.href}
+                        role="menuitem"
+                        class:list={['nav-menu-item', { active: path.startsWith(item.href) }]}
+                      >
+                        <strong>{item.label}</strong>
+                        <small>{item.hint}</small>
+                      </a>
+                    ) : (
+                      <span role="menuitem" aria-disabled="true" class="nav-menu-item locked">
+                        <strong>{item.label}</strong>
+                        <small>{item.hint}</small>
+                      </span>
+                    ),
+                  )}
                 </div>
               </div>
             ))
@@ -114,9 +128,7 @@ const activeGroup = (items: { href: string }[]) => items.some((i) => path.starts
           <a href="/budget" class:list={['nav-link', { active: path.startsWith('/budget') }]}>
             Budget follow-up
           </a>
-          <a href="/analytics" class:list={['nav-link', { active: path.startsWith('/analytics') }]}>
-            Production ABC
-          </a>
+          <span class="nav-link locked" aria-disabled="true">Production ABC</span>
           <a href="/ot-cost" class:list={['nav-link', { active: path.startsWith('/ot-cost') }]}>
             OT cost
           </a>

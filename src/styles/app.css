@@ -187,6 +187,20 @@ select {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
+/* A closed page: still named on the bar, but there is nothing to click. */
+.nav-link.locked,
+.nav-menu-item.locked {
+  color: var(--ink-muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.nav-link.locked:hover,
+.nav-menu-item.locked:hover {
+  background: none;
+  color: var(--ink-muted);
+}
+
 /* ------------------------------------------------------- the Sales menu */
 
 .nav-group {
